@@ -6,6 +6,7 @@
 ;; Keywords: languages, lisp
 ;; Version: 0.0.1
 ;; Package-requires: ((shadchen "1.4")(smartparens "1.5"))
+;; Url: https://github.com/nicferrier/niclein
 
 ;; This program is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
