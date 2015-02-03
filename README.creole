@@ -1,0 +1,19 @@
+= niclein - simple leiningen =
+
+Cider is great. But...
+
+As a beginning Clojure user Nic found he wanted to run the whole
+program. Not rely on a relatively complex workflow to reload
+classes. Also it seemed the right thing to do to him.
+
+So this let's you run {{{lein}}} or run a {{{lein repl}}} in a process
+and interact with it.
+
+Nic has never liked {{{ielm}}} or any of the {{{comint}}} modes so
+this also has a basic command line interaction implementation. The
+lein process output is piped into a buffer and a fixed point at the
+end of the buffer is used as the prompt. A simple keymap hanging off a
+prefix key ("#" currently, "##" will insert a "#") is used to allow
+scrolling up and down through the history.
+
+The command line has smartparens support but no completion.
