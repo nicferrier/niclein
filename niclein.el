@@ -46,26 +46,28 @@
 (require 'shadchen)
 (require 'smartparens)
 
+(defconst lein-version "2.5.1"
+  "The version of lein we will retrieve.")
+
+(defconst lein-url
+  (concat "https://github.com/technomancy/leiningen/releases/download/"
+          lein-version
+          "/leiningen-" lein-version "-standalone.zip"))
+
+(defgroup niclein nil
+  "Simple leiningen management for Clojure."
+  :group 'clojure-mode)
+
+(defcustom niclein-java "java"
+  "What Java should we use?"
+  :group 'niclein
+  :type 'file)
+
 (defun niclein/pop-lein (lein-buffer)
   "Pop the lein buffer into view."
   (pop-to-buffer lein-buffer)
   (with-current-buffer lein-buffer
     (goto-char (point-max))))
-
-(defun niclein-run ()
-  "Run leiningen for the current working directory."
-  (interactive)
-  (let ((proc
-         (start-process
-          "*niclein*"
-          (format "*niclein-%s*" (buffer-file-name))
-          "lein"
-          "run")))
-    (niclein/pop-lein (process-buffer proc))
-    (set-process-sentinel
-     proc (lambda (proc evt)
-            (when (equal evt "finished\n")
-              (niclein/pop-lein (process-buffer proc)))))))
 
 (defvar niclein/prompt-marker nil
   "Where the prompt is in a repl buffer.")
@@ -224,6 +226,49 @@ Also initiates `show-paren-mode' and `smartparens-mode'.")
               lines)))
     (goto-char niclein/prompt-entry-marker)))
 
+(defun niclein/lein-process (name buffer &rest cmd)
+  "Abstract lein process boot."
+  (let ((shell-script nil)
+        (lein-jar
+         (expand-file-name
+          "leiningen-2.5.1-standalone.jar"
+          "~/.lein/self-installs")))
+    (if shell-script
+        (apply
+         'start-process
+         (append (list name buffer "lein") cmd))
+        ;; Else use java directly
+        (let ((default-directory
+               (locate-dominating-file
+                default-directory "project.clj")))
+          ;;(setenv "TRAMPOLINE_FILE" tmpfile)
+          (apply
+           'start-process
+           (append
+            (list name buffer 
+                  "java" ; where's your java at?
+                  (concat "-Xbootclasspath/a:" lein-jar)
+                  ;;"-XX:+TieredCompilation"
+                  ;;"-XX:TieredStopAtLevel=1"
+                  (concat "-Dleiningen.original.pwd=" default-directory)
+                  "-classpath" lein-jar
+                  "clojure.main" "-m" "leiningen.core.main")
+            cmd))))))
+
+(defun niclein-run ()
+  "Run leiningen for the current working directory."
+  (interactive)
+  (let* ((out-buf (format "*niclein-%s*" (buffer-file-name)))
+         (proc (niclein/lein-process "*niclein*" out-buf "run")))
+    (niclein/pop-lein (process-buffer proc))
+    (set-process-sentinel
+     proc (lambda (proc evt)
+            (when (equal evt "finished\n")
+              (niclein/pop-lein (process-buffer proc))
+              (with-current-buffer (process-buffer proc)
+                (goto-char (point-max))
+                (insert "*finished*\n")))))))
+
 (defun niclein-start ()
   "Start a leiningen repl in a process.
 
@@ -237,12 +282,8 @@ Each repl buffer has it's own history.
 
 The repl is run in `niclein-mode'."
   (interactive)
-  (let ((proc
-         (start-process
-          "*niclein*"
-          (format "*niclein-repl-%s*" (buffer-file-name))
-          "lein"
-          "repl")))
+  (let* ((repl-buf (format "*niclein-repl-%s*" (buffer-file-name)))
+         (proc (niclein/lein-process "*niclein*" repl-buf "repl")))
     (niclein/pop-lein (process-buffer proc))
     (niclein-mode)
     ;; Set up the repl buffer with a bottom prompt
