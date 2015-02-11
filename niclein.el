@@ -4,7 +4,7 @@
 
 ;; Author: Nic Ferrier <nferrier@ferrier.me.uk>
 ;; Keywords: languages, lisp
-;; Version: 0.0.2
+;; Version: 0.0.3
 ;; Package-requires: ((shadchen "1.4")(smartparens "1.5"))
 ;; Url: https://github.com/nicferrier/niclein
 
@@ -255,6 +255,7 @@ Also initiates `show-paren-mode' and `smartparens-mode'.")
                   "clojure.main" "-m" "leiningen.core.main")
             cmd))))))
 
+;;;###autoload
 (defun niclein-run ()
   "Run leiningen for the current working directory."
   (interactive)
@@ -269,6 +270,7 @@ Also initiates `show-paren-mode' and `smartparens-mode'.")
                 (goto-char (point-max))
                 (insert "*finished*\n")))))))
 
+;;;###autoload
 (defun niclein-start ()
   "Start a leiningen repl in a process.
 
@@ -297,6 +299,7 @@ The repl is run in `niclein-mode'."
       (set-marker-insertion-type niclein/prompt-entry-marker nil))
     (set-process-filter proc 'niclein/proc-filter)))
 
+;;;###autoload
 (defalias 'niclein-repl 'niclein-start)
 
 (provide 'niclein)
