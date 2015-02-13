@@ -264,11 +264,18 @@ Also initiates `show-paren-mode' and `smartparens-mode'.")
     (niclein/pop-lein (process-buffer proc))
     (set-process-sentinel
      proc (lambda (proc evt)
-            (when (equal evt "finished\n")
-              (niclein/pop-lein (process-buffer proc))
-              (with-current-buffer (process-buffer proc)
-                (goto-char (point-max))
-                (insert "*finished*\n")))))))
+            (let ((msg (cond
+                         ((equal evt "finished\n") "*finished*")
+                         ((equal evt "killed\n") "*killed*")
+                         (t nil))))
+              (if (not (stringp msg))
+                  (message "niclein process ended with %s" evt)
+                  ;; Else we know what it is - spit the message out
+                  (niclein/pop-lein (process-buffer proc))
+                  (with-current-buffer (process-buffer proc)
+                    (goto-char (point-max))
+                    (insert msg)
+                    (newline))))))))
 
 ;;;###autoload
 (defun niclein-start ()
