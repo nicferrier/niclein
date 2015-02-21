@@ -240,16 +240,18 @@ Also initiates `show-paren-mode' and `smartparens-mode'.")
         ;; Else use java directly
         (let ((default-directory
                (locate-dominating-file
-                default-directory "project.clj")))
+                default-directory "project.clj"))
+              (tmpfile (make-temp-file "lein")))
           ;;(setenv "TRAMPOLINE_FILE" tmpfile)
+          ;;(setenv "LEIN_FAST_TRAMPOLINE" "y")
           (apply
            'start-process
            (append
             (list name buffer 
                   "java" ; where's your java at?
                   (concat "-Xbootclasspath/a:" lein-jar)
-                  ;;"-XX:+TieredCompilation"
-                  ;;"-XX:TieredStopAtLevel=1"
+                  "-XX:+TieredCompilation"
+                  "-XX:TieredStopAtLevel=1"
                   (concat "-Dleiningen.original.pwd=" default-directory)
                   "-classpath" lein-jar
                   "clojure.main" "-m" "leiningen.core.main")
@@ -292,7 +294,8 @@ Each repl buffer has it's own history.
 The repl is run in `niclein-mode'."
   (interactive)
   (let* ((repl-buf (format "*niclein-repl-%s*" (buffer-file-name)))
-         (proc (niclein/lein-process "*niclein*" repl-buf "repl")))
+         (proc (niclein/lein-process
+                "*niclein*" repl-buf "repl")))
     (niclein/pop-lein (process-buffer proc))
     (niclein-mode)
     ;; Set up the repl buffer with a bottom prompt
