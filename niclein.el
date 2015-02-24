@@ -4,7 +4,7 @@
 
 ;; Author: Nic Ferrier <nferrier@ferrier.me.uk>
 ;; Keywords: languages, lisp
-;; Version: 0.0.5
+;; Version: 0.0.6
 ;; Package-requires: ((shadchen "1.4")(smartparens "1.5"))
 ;; Url: https://github.com/nicferrier/niclein
 
@@ -45,6 +45,7 @@
 
 (require 'shadchen)
 (require 'smartparens)
+(require 'url) ; for retrieving leiningen if we need it
 
 (defconst lein-version "2.5.1"
   "The version of lein we will retrieve.")
@@ -238,24 +239,24 @@ Also initiates `show-paren-mode' and `smartparens-mode'.")
          'start-process
          (append (list name buffer "lein") cmd))
         ;; Else use java directly
-        (let ((default-directory
-               (locate-dominating-file
-                default-directory "project.clj"))
-              (tmpfile (make-temp-file "lein")))
-          ;;(setenv "TRAMPOLINE_FILE" tmpfile)
-          ;;(setenv "LEIN_FAST_TRAMPOLINE" "y")
-          (apply
-           'start-process
-           (append
-            (list name buffer 
-                  "java" ; where's your java at?
-                  (concat "-Xbootclasspath/a:" lein-jar)
-                  "-XX:+TieredCompilation"
-                  "-XX:TieredStopAtLevel=1"
-                  (concat "-Dleiningen.original.pwd=" default-directory)
-                  "-classpath" lein-jar
-                  "clojure.main" "-m" "leiningen.core.main")
-            cmd))))))
+      (let* ((default-directory
+               (or
+                (locate-dominating-file
+                 default-directory "project.clj")
+                default-directory))
+             (tmpfile (make-temp-file "lein"))
+             (args
+              (list name buffer 
+                    "java" ; where's your java at?
+                    (concat "-Xbootclasspath/a:" lein-jar)
+                    "-XX:+TieredCompilation"
+                    "-XX:TieredStopAtLevel=1"
+                    (concat "-Dleiningen.original.pwd=" default-directory)
+                    "-classpath" lein-jar
+                    "clojure.main" "-m" "leiningen.core.main")))
+        ;;(setenv "TRAMPOLINE_FILE" tmpfile)
+        ;;(setenv "LEIN_FAST_TRAMPOLINE" "y")
+        (apply 'start-process (append args cmd))))))
 
 ;;;###autoload
 (defun niclein-run ()
