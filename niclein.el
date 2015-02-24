@@ -313,6 +313,17 @@ The repl is run in `niclein-mode'."
 ;;;###autoload
 (defalias 'niclein-repl 'niclein-start)
 
+;;;###autoload
+(defun niclein-new (project)
+  "Make a new leiningen project in PROJECT directory."
+  (interactive "MProject name: ")
+  (let ((proc
+         (niclein/lein-process
+          (format "*niclein-new-%s*" project)
+          (get-buffer-create (format "*niclein-new-%s*" project))
+          "new" project)))
+    (niclein/pop-lein (process-buffer proc))))
+
 (provide 'niclein)
 
 ;;; niclein.el ends here
