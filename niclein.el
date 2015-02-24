@@ -324,6 +324,33 @@ The repl is run in `niclein-mode'."
           "new" project)))
     (niclein/pop-lein (process-buffer proc))))
 
+;;;###autoload
+(defun niclein-app-new (project)
+  "Make a new leiningen app project in PROJECT directory."
+  (interactive "MProject name: ")
+  (let ((proc
+         (niclein/lein-process
+          (format "*niclein-new-%s*" project)
+          (get-buffer-create (format "*niclein-new-%s*" project))
+          "new" "app" project)))
+    (niclein/pop-lein (process-buffer proc))))
+
+;;;###autoload
+(defun niclein-help (sub-command)
+  "Show lein help"
+  (interactive
+   (list
+    (when current-prefix-arg
+      (read-from-minibuffer "sub command: "))))
+  (let ((proc
+         (apply 'niclein/lein-process
+                (append (list
+                         "*niclein-help*"
+                         (get-buffer-create "*niclein-help*")
+                         "help") (when sub-command
+                                   (list sub-command))))))
+    (niclein/pop-lein (process-buffer proc))))
+
 (provide 'niclein)
 
 ;;; niclein.el ends here
