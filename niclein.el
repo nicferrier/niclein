@@ -46,6 +46,21 @@
 (require 'shadchen)
 (require 'smartparens)
 (require 'url) ; for retrieving leiningen if we need it
+(require 'clojure)
+
+(defgroup clojure-custard-mode nil
+  "Customize group for stuff not customizable in clojure-mode.")
+
+(defcustom clojure-custard-mode-hook nil
+  "Hook for clojure-custard-mode."
+  :type 'hook
+  :group 'clojure-custard-mode)
+
+(define-derived-mode
+  clojure-custard-mode clojure-mode "Clojure"
+  "A customizable extension to `clojure-mode'."
+  :group 'clojure-custard-mode)
+
 
 (defconst lein-version "2.5.1"
   "The version of lein we will retrieve.")
