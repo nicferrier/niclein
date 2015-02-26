@@ -274,6 +274,19 @@ Also initiates `show-paren-mode' and `smartparens-mode'.")
         (apply 'start-process (append args cmd))))))
 
 ;;;###autoload
+(defun niclein-deps (project)
+  "Run the deps command in the project."
+  (interactive (list (or (locate-dominating-file
+                          default-directory "project.clj")
+                         default-directory)))
+  (let ((proc
+         (niclein/lein-process
+          (format "*niclein-deps-%s*" project)
+          (get-buffer-create (format "*niclein-new-%s*" project))
+          "deps")))
+    (niclein/pop-lein (process-buffer proc))))
+
+;;;###autoload
 (defun niclein-run ()
   "Run leiningen for the current working directory."
   (interactive)
