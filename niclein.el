@@ -46,7 +46,7 @@
 (require 'shadchen)
 (require 'smartparens)
 (require 'url) ; for retrieving leiningen if we need it
-(require 'clojure)
+(require 'clojure-mode)
 
 (defgroup clojure-custard-mode nil
   "Customize group for stuff not customizable in clojure-mode.")
