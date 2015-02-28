@@ -318,13 +318,15 @@ Also initiates `show-paren-mode' and `smartparens-mode'.")
         (insert data)))))
 
 ;;;###autoload
-(defun niclein-run (&optional args)
+(defun niclein-run (&optional cmd-args)
   "Run leiningen for the current working directory."
   (interactive
-   (if current-prefix-arg
-       (read-from-minibuffer "program arguments: ")))
+   (when current-prefix-arg
+     (list
+      (read-from-minibuffer "program arguments: "))))
   (let* ((out-buf (format "*niclein-%s*" (buffer-file-name)))
-         (proc (niclein/lein-process "*niclein*" out-buf "run")))
+         (arg-words (when cmd-args (split-string cmd-args " ")))
+         (proc (apply 'niclein/lein-process "*niclein*" out-buf "run" arg-words)))
     (with-current-buffer (process-buffer proc)
       (niclein-clojure-output-mode))
     (niclein/pop-lein (process-buffer proc))
