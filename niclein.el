@@ -286,12 +286,47 @@ Also initiates `show-paren-mode' and `smartparens-mode'.")
           "deps")))
     (niclein/pop-lein (process-buffer proc))))
 
-;;;###autoload
-(defun niclein-run ()
-  "Run leiningen for the current working directory."
+(defun niclein/output-mode-clear ()
+  "Clear the output."
   (interactive)
+  (let (buffer-read-only)
+    (erase-buffer)))
+
+(defconst niclein-clojure-output-mode-map (make-sparse-keymap))
+
+(defun niclein/clojure-output-mode-map-init ()
+  "Initialize the keymap."
+  (define-key niclein-clojure-output-mode-map (kbd "c") 'niclein/output-mode-clear)
+  (use-local-map niclein-clojure-output-mode-map))
+
+(define-generic-mode niclein-clojure-output-mode
+    nil nil nil nil
+    (list
+     'niclein/clojure-output-mode-map-init
+     (lambda ()
+       (setq buffer-read-only t)))
+    "A mode for clojure output
+
+\\{niclein-clojure-output-mode-map}
+")
+
+(defun niclein/filter (proc data)
+  (with-current-buffer (process-buffer proc)
+    (save-excursion
+      (goto-char (point-max))
+      (let (buffer-read-only)
+        (insert data)))))
+
+;;;###autoload
+(defun niclein-run (&optional args)
+  "Run leiningen for the current working directory."
+  (interactive
+   (if current-prefix-arg
+       (read-from-minibuffer "program arguments: ")))
   (let* ((out-buf (format "*niclein-%s*" (buffer-file-name)))
          (proc (niclein/lein-process "*niclein*" out-buf "run")))
+    (with-current-buffer (process-buffer proc)
+      (niclein-clojure-output-mode))
     (niclein/pop-lein (process-buffer proc))
     (set-process-sentinel
      proc (lambda (proc evt)
@@ -302,11 +337,12 @@ Also initiates `show-paren-mode' and `smartparens-mode'.")
               (if (not (stringp msg))
                   (message "niclein process ended with %s" evt)
                   ;; Else we know what it is - spit the message out
-                  (niclein/pop-lein (process-buffer proc))
-                  (with-current-buffer (process-buffer proc)
-                    (goto-char (point-max))
+                (niclein/pop-lein (process-buffer proc))
+                (with-current-buffer (process-buffer proc)
+                  (goto-char (point-max))
+                  (let (buffer-read-only)
                     (insert msg)
-                    (newline))))))))
+                    (newline)))))))))
 
 ;;;###autoload
 (defun niclein-start ()
