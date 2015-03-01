@@ -271,6 +271,7 @@ Also initiates `show-paren-mode' and `smartparens-mode'.")
                     "clojure.main" "-m" "leiningen.core.main")))
         ;;(setenv "TRAMPOLINE_FILE" tmpfile)
         ;;(setenv "LEIN_FAST_TRAMPOLINE" "y")
+        (message "running lein with %s" (append args cmd))
         (apply 'start-process (append args cmd))))))
 
 ;;;###autoload
