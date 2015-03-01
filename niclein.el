@@ -155,9 +155,10 @@ instance created here is not used.")
 
 (defun niclein/cli-strip-cmd ()
   "Take the command off the command line."
-  (prog1
-      (buffer-substring-no-properties niclein/prompt-entry-marker (point-max))
-    (delete-region niclein/prompt-entry-marker (point-max))))
+  (let ((cmd 
+         (buffer-substring-no-properties niclein/prompt-entry-marker (point-max))))
+    (delete-region niclein/prompt-entry-marker (point-max))
+    cmd))
 
 (defun niclein/send-command (process command)
   "Send COMMAND to the niclein PROCESS.
@@ -167,6 +168,9 @@ COMMAND is read from the prompt if we're in interactive mode."
    (list (get-buffer-process (current-buffer))
          (niclein/cli-strip-cmd)))
   (when (and command (not (equal command "")))
+    (save-excursion
+      (goto-char (line-beginning-position))
+      (insert ";" command " >\n"))
     (funcall niclein/hist :new command)
     (process-send-string process (format "%s\n" command))))
 
@@ -233,9 +237,8 @@ Also initiates `show-paren-mode' and `smartparens-mode'.")
   (with-current-buffer (process-buffer proc)
     (save-excursion
       (let ((lines
-              (--take-while
-               (not (string-match "^\\([a-zA-Z.-]+\\)=> " it))
-               (split-string data "\n"))))
+             (->> (split-string data "\n")
+               (--take-while (not (string-match "^\\([a-zA-Z.-]+\\)=> " it))))))
         (mapc (lambda (l)
                 (goto-char niclein/prompt-marker)
                 (insert (concat l "\n")))
