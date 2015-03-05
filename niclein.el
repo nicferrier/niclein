@@ -285,6 +285,47 @@ Also initiates `show-paren-mode' and `smartparens-mode'.")
                     (insert msg)
                     (newline))))))))
 
+(defvar niclein-lein-proc nil
+  "The inferiror lein process for a clojure buffer.
+
+If a lein repl is started, this variable will point to the
+process.")
+
+(make-variable-buffer-local 'niclein-lein-proc)
+
+(defmacro niclein/with-lein-buffer (&rest code)
+  `(if (process-live-p niclein-lein-proc)
+       (progn
+         (progn ,@code)
+         (niclein/pop-lein (process-buffer niclein-lein-proc)))
+       (message "%s has no lein process - use M-x niclein-start" (buffer-name))))
+
+(defun niclein-eval-region (start end)
+  (interactive "r")
+  (niclein/with-lein-buffer
+   (process-send-string
+    niclein-lein-proc
+    (concat
+     (buffer-substring-no-properties start end)
+     "\n"))))
+
+(defun niclein-eval-last-sexp ()
+  (interactive)
+  (niclein-eval-region
+   (save-excursion (backward-sexp) (point)) (point)))
+
+(defconst niclein-interaction-keymap (make-sparse-keymap))
+
+(defun niclein/init-interaction-keymap ()
+  (define-key niclein-interaction-keymap (kbd "C-x C-e") 'niclein-eval-last-sexp))
+
+(define-minor-mode niclein-interaction "Interact with a leiningen child process."
+  nil
+  "*niclein*"
+  niclein-interaction-keymap
+  ;; And now the body...
+  (niclein/init-interaction-keymap))
+
 ;;;###autoload
 (defun niclein-start ()
   "Start a leiningen repl in a process.
@@ -297,23 +338,32 @@ a prefix key:
 
 Each repl buffer has it's own history.
 
-The repl is run in `niclein-mode'."
+The repl is run in `niclein-mode'.
+
+Once the repl is started `niclein-lein-buffer' will contain a
+reference to it."
   (interactive)
-  (let* ((repl-buf (format "*niclein-repl-%s*" (buffer-file-name)))
-         (proc (niclein/lein-process
-                "*niclein*" repl-buf "repl")))
-    (niclein/pop-lein (process-buffer proc))
-    (niclein-mode)
-    ;; Set up the repl buffer with a bottom prompt
-    (with-current-buffer (process-buffer proc)
-      (setq niclein/prompt-marker (point-marker))
-      (set-marker-insertion-type niclein/prompt-marker nil)
-      (goto-char niclein/prompt-marker)
-      (insert "=> ")
-      (set-marker-insertion-type niclein/prompt-marker t)
-      (setq niclein/prompt-entry-marker (point-marker))
-      (set-marker-insertion-type niclein/prompt-entry-marker nil))
-    (set-process-filter proc 'niclein/proc-filter)))
+  (if (process-live-p niclein-lein-proc)
+      (progn
+        (message "%s already has a lein process" (buffer-name))
+        (niclein/pop-lein (process-buffer niclein-lein-proc)))
+      ;; Else
+      (let* ((repl-buf (format "*niclein-repl-%s*" (buffer-name)))
+             (proc (niclein/lein-process
+                    "*niclein*" repl-buf "repl")))
+        (setq niclein-lein-buffer (process-buffer proc))
+        (niclein/pop-lein (process-buffer proc))
+        (niclein-mode)
+        ;; Set up the repl buffer with a bottom prompt
+        (with-current-buffer (process-buffer proc)
+          (setq niclein/prompt-marker (point-marker))
+          (set-marker-insertion-type niclein/prompt-marker nil)
+          (goto-char niclein/prompt-marker)
+          (insert "=> ")
+          (set-marker-insertion-type niclein/prompt-marker t)
+          (setq niclein/prompt-entry-marker (point-marker))
+          (set-marker-insertion-type niclein/prompt-entry-marker nil))
+        (set-process-filter proc 'niclein/proc-filter))))
 
 ;;;###autoload
 (defalias 'niclein-repl 'niclein-start)
