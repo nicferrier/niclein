@@ -195,6 +195,11 @@ COMMAND is read from the prompt if we're in interactive mode."
     (funcall
      (lookup-key niclein-keymap key))))
 
+(defun niclein/init-map ()
+  (define-key niclein-keymap (kbd "n") 'niclein/cli-history-next)
+  (define-key niclein-keymap (kbd "p") 'niclein/cli-history-previous)
+  (define-key niclein-keymap (kbd "#") 'niclein/cli-hash))
+
 (define-generic-mode niclein-mode
   '(";")
   nil
@@ -205,9 +210,7 @@ COMMAND is read from the prompt if we're in interactive mode."
      (show-paren-mode)
      (smartparens-mode)
      (setq-local niclein/hist (niclein/cli)) ; appears to work even tho it's a const
-     (define-key niclein-keymap (kbd "n") 'niclein/cli-history-next)
-     (define-key niclein-keymap (kbd "p") 'niclein/cli-history-previous)
-     (define-key niclein-keymap (kbd "#") 'niclein/cli-hash)
+     (niclein/init-map)
      (local-set-key (kbd "#") 'niclein-cli-read)
      (local-set-key (kbd "C-a") 'niclein/buffer-cli-bol)
      (local-set-key (kbd "RET") 'niclein/send-command)))
