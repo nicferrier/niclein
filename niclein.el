@@ -267,7 +267,7 @@ Also initiates `show-paren-mode' and `smartparens-mode'.")
 (defun niclein-run ()
   "Run leiningen for the current working directory."
   (interactive)
-  (let* ((out-buf (format "*niclein-%s*" (buffer-file-name)))
+  (let* ((out-buf (format "*niclein-%s*" (buffer-name)))
          (proc (niclein/lein-process "*niclein*" out-buf "run")))
     (niclein/pop-lein (process-buffer proc))
     (set-process-sentinel
