@@ -4,7 +4,7 @@
 
 ;; Author: Nic Ferrier <nferrier@ferrier.me.uk>
 ;; Keywords: languages, lisp
-;; Version: 0.0.9
+;; Version: 0.0.10
 ;; Package-requires: ((shadchen "1.4")(smartparens "1.5"))
 ;; Url: https://github.com/nicferrier/niclein
 
@@ -56,6 +56,7 @@
   :type 'hook
   :group 'clojure-custard-mode)
 
+;;;###autoload
 (define-derived-mode
   clojure-custard-mode clojure-mode "Clojure"
   "A customizable extension to `clojure-mode'."
