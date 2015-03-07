@@ -236,7 +236,9 @@ Also initiates `show-paren-mode' and `smartparens-mode'.")
     (save-excursion
       (let ((lines
              (->> (split-string data "\n")
-               (--take-while (not (string-match "^\\([a-zA-Z.-]+\\)=> " it))))))
+               (--take-while (not (string-match "^\\([a-zA-Z.-]+\\)=> " it)))
+               (--map (replace-regexp-in-string " +\\(#_=>\\)" "\n\\1" it))
+               (-flatten))))
         (mapc (lambda (l)
                 (goto-char niclein/prompt-marker)
                 (insert (concat l "\n")))
