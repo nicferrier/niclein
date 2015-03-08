@@ -290,7 +290,7 @@ process.")
 (defun niclein-pop-lein (&optional lein-buffer)
   "Pop the lein buffer into view."
   (interactive)
-  (let ((buf (or lein-buffer (process-buffer niclein-lein-proc))))
+  (let ((buf (or lein-buffer (process-buffer (symbol-value 'niclein-lein-proc)))))
     (pop-to-buffer buf)
     (with-current-buffer buf
       (goto-char (point-max)))))
@@ -302,7 +302,7 @@ process.")
                           default-directory "project.clj")
                          default-directory)))
   (let ((proc
-         (niclein-lein-process
+         (niclein/lein-process
           (format "*niclein-deps-%s*" project)
           (get-buffer-create (format "*niclein-new-%s*" project))
           "deps")))
