@@ -234,10 +234,11 @@ Also initiates `show-paren-mode' and `smartparens-mode'.")
 (defun niclein/proc-filter (proc data)
   (with-current-buffer (process-buffer proc)
     (save-excursion
-      (let ((lines
-             (->> (split-string data "\n")
-               (--take-while (not (string-match "^\\([a-zA-Z.-]+\\)=> " it)))
-               (--map (replace-regexp-in-string " +\\(#_=>\\)" "\n\\1" it))
+      (let* ((raw-lines (split-string data "\n"))
+             (lines
+              (->> raw-lines
+                (--take-while (not (string-match "^\\([a-zA-Z.-]+\\)=> +$" it)))
+                (--map (replace-regexp-in-string " +\\(#_=>\\)" "\n\\1" it))
                (-flatten))))
         (mapc (lambda (l)
                 (goto-char niclein/prompt-marker)
@@ -383,6 +384,18 @@ process.")
      (buffer-substring-no-properties start end)
      "\n"))))
 
+(defun niclein-eval-defun (pt)
+  "Eval the current clojure defn or def."
+  (interactive "d")
+  (save-excursion
+    (goto-char pt)
+    (let ((end (save-excursion (end-of-defun)(point))))
+      (niclein-eval-region
+       (progn
+         (beginning-of-defun)
+         (point))
+       end))))
+
 (defun niclein-eval-last-sexp ()
   (interactive)
   (niclein-eval-region
@@ -393,6 +406,7 @@ process.")
 (defun niclein/init-interaction-keymap ()
   (define-key niclein-interaction-keymap (kbd "C-x C-e") 'niclein-eval-last-sexp)
   (define-key niclein-interaction-keymap (kbd "C-c C-e") 'niclein-eval-last-sexp)
+  (define-key niclein-interaction-keymap (kbd "M-C-x") 'niclein-eval-defun)
   (define-key niclein-interaction-keymap (kbd "C-c C-z") 'niclein-pop-lein))
 
 (define-minor-mode niclein-interaction "Interact with a leiningen child process."
