@@ -302,11 +302,11 @@ process.")
                           default-directory "project.clj")
                          default-directory)))
   (let ((proc
-         (niclein/lein-process
+         (niclein-lein-process
           (format "*niclein-deps-%s*" project)
           (get-buffer-create (format "*niclein-new-%s*" project))
           "deps")))
-    (niclein/pop-lein (process-buffer proc))))
+    (niclein-pop-lein (process-buffer proc))))
 
 (defun niclein/output-mode-clear ()
   "Clear the output."
@@ -361,7 +361,7 @@ process.")
               (if (not (stringp msg))
                   (message "niclein process ended with %s" evt)
                   ;; Else we know what it is - spit the message out
-                (niclein/pop-lein (process-buffer proc))
+                (niclein-pop-lein (process-buffer proc))
                 (with-current-buffer (process-buffer proc)
                   (goto-char (point-max))
                   (let (buffer-read-only)
@@ -436,7 +436,7 @@ reference to it."
   (if (process-live-p niclein-lein-proc)
       (progn
         (message "%s already has a lein process" (buffer-name))
-        (niclein/pop-lein (process-buffer niclein-lein-proc)))
+        (niclein-pop-lein (process-buffer niclein-lein-proc)))
       ;; Else
       (let* ((repl-buf (format "*niclein-repl-%s*" (buffer-name)))
              (proc (niclein/lein-process
@@ -467,7 +467,7 @@ reference to it."
           (format "*niclein-new-%s*" project)
           (get-buffer-create (format "*niclein-new-%s*" project))
           "new" project)))
-    (niclein/pop-lein (process-buffer proc))))
+    (niclein-pop-lein (process-buffer proc))))
 
 ;;;###autoload
 (defun niclein-app-new (project)
@@ -478,7 +478,7 @@ reference to it."
           (format "*niclein-new-%s*" project)
           (get-buffer-create (format "*niclein-new-%s*" project))
           "new" "app" project)))
-    (niclein/pop-lein (process-buffer proc))))
+    (niclein-pop-lein (process-buffer proc))))
 
 ;;;###autoload
 (defun niclein-help (sub-command)
@@ -494,7 +494,7 @@ reference to it."
                          (get-buffer-create "*niclein-help*")
                          "help") (when sub-command
                                    (list sub-command))))))
-    (niclein/pop-lein (process-buffer proc))))
+    (niclein-pop-lein (process-buffer proc))))
 
 (provide 'niclein)
 
