@@ -4,7 +4,7 @@
 
 ;; Author: Nic Ferrier <nferrier@ferrier.me.uk>
 ;; Keywords: languages, lisp
-;; Version: 0.0.10
+;; Version: 0.0.11
 ;; Package-requires: ((shadchen "1.4")(smartparens "1.5"))
 ;; Url: https://github.com/nicferrier/niclein
 
@@ -458,26 +458,28 @@ reference to it."
 ;;;###autoload
 (defalias 'niclein-repl 'niclein-start)
 
-;;;###autoload
-(defun niclein-new (project)
-  "Make a new leiningen project in PROJECT directory."
-  (interactive "MProject name: ")
-  (let ((proc
-         (niclein/lein-process
-          (format "*niclein-new-%s*" project)
-          (get-buffer-create (format "*niclein-new-%s*" project))
-          "new" project)))
-    (niclein-pop-lein (process-buffer proc))))
 
 ;;;###autoload
-(defun niclein-app-new (project)
-  "Make a new leiningen app project in PROJECT directory."
-  (interactive "MProject name: ")
+(defun niclein-new (project &optional template)
+  "Make a new leiningen project in PROJECT directory."
+  (interactive
+   (if current-prefix-arg
+       (list
+        (read-from-minibuffer "Project name: ")
+        (completing-read "Lein template: " '("app" . "app")))
+     (list (read-from-minibuffer "Project name: "))))
+  ;;(interactive "MProject name: ")
   (let ((proc
-         (niclein/lein-process
-          (format "*niclein-new-%s*" project)
-          (get-buffer-create (format "*niclein-new-%s*" project))
-          "new" "app" project)))
+         (apply
+          'niclein/lein-process
+          (append
+           (list 
+            (format "*niclein-new-%s*" project)
+            (get-buffer-create (format "*niclein-new-%s*" project))
+            "new")
+           (if template
+               (list template project)
+             (list project))))))
     (niclein-pop-lein (process-buffer proc))))
 
 ;;;###autoload
