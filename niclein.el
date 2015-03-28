@@ -4,7 +4,7 @@
 
 ;; Author: Nic Ferrier <nferrier@ferrier.me.uk>
 ;; Keywords: languages, lisp
-;; Version: 0.0.11
+;; Version: 0.0.14
 ;; Package-requires: ((shadchen "1.4")(smartparens "1.5"))
 ;; Url: https://github.com/nicferrier/niclein
 
@@ -246,6 +246,10 @@ Also initiates `show-paren-mode' and `smartparens-mode'.")
               lines)))
     (goto-char niclein/prompt-entry-marker)))
 
+;;; the window batch file for this is:
+;;; @echo off
+;;; java -classpath C:/users/43870810/.lein/self-installs/leiningen.jar clojure.main -m leiningen.core.main %*
+
 (defun niclein/lein-process (name buffer &rest cmd)
   "Abstract lein process boot."
   (let ((shell-script nil)
@@ -275,7 +279,7 @@ Also initiates `show-paren-mode' and `smartparens-mode'.")
                     "clojure.main" "-m" "leiningen.core.main")))
         ;;(setenv "TRAMPOLINE_FILE" tmpfile)
         ;;(setenv "LEIN_FAST_TRAMPOLINE" "y")
-        (message "running lein with %s" (append args cmd))
+        ;;(message "running lein with %s" (append args cmd))
         (apply 'start-process (append args cmd))))))
 
 
@@ -438,7 +442,8 @@ reference to it."
         (message "%s already has a lein process" (buffer-name))
         (niclein-pop-lein (process-buffer niclein-lein-proc)))
       ;; Else
-      (let* ((repl-buf (format "*niclein-repl-%s*" (buffer-name)))
+      (let* ((source-buffer (current-buffer))
+             (repl-buf (format "*niclein-repl-%s*" (buffer-name)))
              (proc (niclein/lein-process
                     "*niclein*" repl-buf "repl")))
         (setq niclein-lein-proc proc)
@@ -453,6 +458,8 @@ reference to it."
           (set-marker-insertion-type niclein/prompt-marker t)
           (setq niclein/prompt-entry-marker (point-marker))
           (set-marker-insertion-type niclein/prompt-entry-marker nil))
+        (with-current-buffer source-buffer
+          (niclein-interaction))
         (set-process-filter proc 'niclein/proc-filter))))
 
 ;;;###autoload
