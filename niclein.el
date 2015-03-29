@@ -4,8 +4,8 @@
 
 ;; Author: Nic Ferrier <nferrier@ferrier.me.uk>
 ;; Keywords: languages, lisp
-;; Version: 0.0.14
-;; Package-requires: ((shadchen "1.4")(smartparens "1.5"))
+;; Version: 0.0.15
+;; Package-requires: ((shadchen "1.4")(smartparens "1.5")(s "1.9.0"))
 ;; Url: https://github.com/nicferrier/niclein
 
 ;; This program is free software; you can redistribute it and/or modify
@@ -47,6 +47,7 @@
 (require 'smartparens)
 (require 'url) ; for retrieving leiningen if we need it
 (require 'clojure-mode)
+(require 's)
 
 (defgroup clojure-custard-mode nil
   "Customize group for stuff not customizable in clojure-mode.")
@@ -56,12 +57,37 @@
   :type 'hook
   :group 'clojure-custard-mode)
 
+(defun niclein/lein-process-command (&rest cmd)
+  "Construct the Java leiningen command from CMD."
+  (let ((lein-jar
+         (expand-file-name
+          "leiningen-2.5.1-standalone.jar"
+          "~/.lein/self-installs")))
+    (append
+     (list
+      "java" ; where's your java at?
+      (concat "-Xbootclasspath/a:" lein-jar)
+      "-XX:+TieredCompilation"
+      "-XX:TieredStopAtLevel=1"
+      (concat "-Dleiningen.original.pwd=" default-directory)
+      "-classpath" lein-jar
+      "clojure.main" "-m" "leiningen.core.main")
+     cmd)))
+
 ;;;###autoload
 (define-derived-mode
   clojure-custard-mode clojure-mode "Clojure"
   "A customizable extension to `clojure-mode'."
-  :group 'clojure-custard-mode)
-
+  :group 'clojure-custard-mode
+  ;; Body
+  (let ((project
+         (locate-dominating-file default-directory "project.clj")))
+    (setq compile-command
+          (s-join
+           " "
+           (append
+            (list "cd" project ";")
+            (niclein/lein-process-command "compile"))))))
 
 (defconst lein-version "2.5.1"
   "The version of lein we will retrieve.")
@@ -252,36 +278,25 @@ Also initiates `show-paren-mode' and `smartparens-mode'.")
 
 (defun niclein/lein-process (name buffer &rest cmd)
   "Abstract lein process boot."
-  (let ((shell-script nil)
-        (lein-jar
-         (expand-file-name
-          "leiningen-2.5.1-standalone.jar"
-          "~/.lein/self-installs")))
+  (let ((shell-script nil))
     (if shell-script
         (apply
          'start-process
          (append (list name buffer "lein") cmd))
         ;; Else use java directly
       (let* ((default-directory
-               (or
+              (or
                 (locate-dominating-file
                  default-directory "project.clj")
                 default-directory))
              (tmpfile (make-temp-file "lein"))
              (args
-              (list name buffer 
-                    "java" ; where's your java at?
-                    (concat "-Xbootclasspath/a:" lein-jar)
-                    "-XX:+TieredCompilation"
-                    "-XX:TieredStopAtLevel=1"
-                    (concat "-Dleiningen.original.pwd=" default-directory)
-                    "-classpath" lein-jar
-                    "clojure.main" "-m" "leiningen.core.main")))
+              (append (list name buffer)
+                      (apply 'niclein/lein-process-command cmd))))
         ;;(setenv "TRAMPOLINE_FILE" tmpfile)
         ;;(setenv "LEIN_FAST_TRAMPOLINE" "y")
         ;;(message "running lein with %s" (append args cmd))
         (apply 'start-process (append args cmd))))))
-
 
 (defvar niclein-lein-proc nil
   "The inferiror lein process for a clojure buffer.
