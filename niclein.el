@@ -4,7 +4,7 @@
 
 ;; Author: Nic Ferrier <nferrier@ferrier.me.uk>
 ;; Keywords: languages, lisp
-;; Version: 0.0.15
+;; Version: 0.0.16
 ;; Package-requires: ((shadchen "1.4")(smartparens "1.5")(s "1.9.0"))
 ;; Url: https://github.com/nicferrier/niclein
 
@@ -296,7 +296,7 @@ Also initiates `show-paren-mode' and `smartparens-mode'.")
         ;;(setenv "TRAMPOLINE_FILE" tmpfile)
         ;;(setenv "LEIN_FAST_TRAMPOLINE" "y")
         ;;(message "running lein with %s" (append args cmd))
-        (apply 'start-process (append args cmd))))))
+        (apply 'start-process args)))))
 
 (defvar niclein-lein-proc nil
   "The inferiror lein process for a clojure buffer.
