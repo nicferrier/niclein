@@ -4,7 +4,7 @@
 
 ;; Author: Nic Ferrier <nferrier@ferrier.me.uk>
 ;; Keywords: languages, lisp
-;; Version: 0.0.18
+;; Version: 0.0.19
 ;; Package-requires: ((shadchen "1.4")(smartparens "1.5")(s "1.9.0"))
 ;; Url: https://github.com/nicferrier/niclein
 
