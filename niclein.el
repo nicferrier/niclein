@@ -4,7 +4,7 @@
 
 ;; Author: Nic Ferrier <nferrier@ferrier.me.uk>
 ;; Keywords: languages, lisp
-;; Version: 0.0.16
+;; Version: 0.0.17
 ;; Package-requires: ((shadchen "1.4")(smartparens "1.5")(s "1.9.0"))
 ;; Url: https://github.com/nicferrier/niclein
 
@@ -323,8 +323,33 @@ process.")
   (let ((proc
          (niclein/lein-process
           (format "*niclein-deps-%s*" project)
-          (get-buffer-create (format "*niclein-new-%s*" project))
+          (get-buffer-create (format "*niclein-deps-%s*" project))
           "deps")))
+    (niclein-pop-lein (process-buffer proc))))
+
+
+(defconst niclein/lein-commands
+  '(change    check    classpath    clean    compile
+    deploy    deps    do
+    help    install   jar    javac
+    new    plugin    pom    release
+    repl    retest    run    search
+    set-version    show-profiles    test    trampoline
+    uberjar    update-in    upgrade    vcs    version    with-profile)
+  "List of lein commands.") ; we should really generate this from lein
+
+(defun niclein-command (project command)
+  (interactive
+   (let ((commands (--map (cons it it) niclein/lein-commands)))
+     (list (or (locate-dominating-file
+                default-directory "project.clj")
+               default-directory)
+           (completing-read "lein command: " commands))))
+  (let ((proc
+         (niclein/lein-process
+          (format "*niclein-%s-%s*" command project)
+          (get-buffer-create (format "*niclein-%s-%s*" commmand project))
+          (symbol-name command))))
     (niclein-pop-lein (process-buffer proc))))
 
 (defun niclein/output-mode-clear ()
