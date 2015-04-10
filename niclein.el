@@ -350,7 +350,7 @@ process.")
          (niclein/lein-process
           (format "*niclein-%s-%s*" command project)
           (get-buffer-create (format "*niclein-%s-%s*" command project))
-          (symbol-name command))))
+          command)))
     (niclein-pop-lein (process-buffer proc))))
 
 (defun niclein/output-mode-clear ()
