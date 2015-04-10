@@ -4,7 +4,7 @@
 
 ;; Author: Nic Ferrier <nferrier@ferrier.me.uk>
 ;; Keywords: languages, lisp
-;; Version: 0.0.17
+;; Version: 0.0.18
 ;; Package-requires: ((shadchen "1.4")(smartparens "1.5")(s "1.9.0"))
 ;; Url: https://github.com/nicferrier/niclein
 
@@ -339,16 +339,17 @@ process.")
   "List of lein commands.") ; we should really generate this from lein
 
 (defun niclein-command (project command)
+  "Run any lein COMMAND in PROJECT."
   (interactive
-   (let ((commands (--map (cons it it) niclein/lein-commands)))
-     (list (or (locate-dominating-file
-                default-directory "project.clj")
-               default-directory)
+   (list (or (locate-dominating-file
+              default-directory "project.clj")
+             default-directory)
+         (let ((commands (--map (cons it it) niclein/lein-commands)))
            (completing-read "lein command: " commands))))
   (let ((proc
          (niclein/lein-process
           (format "*niclein-%s-%s*" command project)
-          (get-buffer-create (format "*niclein-%s-%s*" commmand project))
+          (get-buffer-create (format "*niclein-%s-%s*" command project))
           (symbol-name command))))
     (niclein-pop-lein (process-buffer proc))))
 
