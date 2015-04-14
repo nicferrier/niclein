@@ -4,7 +4,7 @@
 
 ;; Author: Nic Ferrier <nferrier@ferrier.me.uk>
 ;; Keywords: languages, lisp
-;; Version: 0.0.19
+;; Version: 0.0.20
 ;; Package-requires: ((shadchen "1.4")(smartparens "1.5")(s "1.9.0"))
 ;; Url: https://github.com/nicferrier/niclein
 
@@ -310,7 +310,7 @@ process.")
   "Pop the lein buffer into view."
   (interactive)
   (let ((buf (or lein-buffer (process-buffer (symbol-value 'niclein-lein-proc)))))
-    (pop-to-buffer buf)
+    (pop-to-buffer buf t)
     (with-current-buffer buf
       (goto-char (point-max)))))
 
