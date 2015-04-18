@@ -4,7 +4,7 @@
 
 ;; Author: Nic Ferrier <nferrier@ferrier.me.uk>
 ;; Keywords: languages, lisp
-;; Version: 0.0.20
+;; Version: 0.0.21
 ;; Package-requires: ((shadchen "1.4")(smartparens "1.5")(s "1.9.0"))
 ;; Url: https://github.com/nicferrier/niclein
 
@@ -49,6 +49,30 @@
 (require 'clojure-mode)
 (require 's)
 
+(defconst lein-version "2.5.1"
+  "The version of lein we will retrieve.")
+
+(defconst lein-url
+  (concat "https://github.com/technomancy/leiningen/releases/download/"
+          lein-version
+          "/leiningen-" lein-version "-standalone.zip"))
+
+(defgroup niclein nil
+  "Simple leiningen management for Clojure."
+  :group 'clojure-mode)
+
+(defcustom niclein-java "java"
+  "What Java should we use?"
+  :group 'niclein
+  :type 'file)
+
+(defvar niclein/prompt-marker nil
+  "Where the prompt is in a repl buffer.")
+
+(defvar niclein/prompt-entry-marker nil
+  "Where text entry for the prompt should be in a repl buffer.")
+
+
 (defgroup clojure-custard-mode nil
   "Customize group for stuff not customizable in clojure-mode.")
 
@@ -65,7 +89,7 @@
           "~/.lein/self-installs")))
     (append
      (list
-      "java" ; where's your java at?
+      niclein-java
       (concat "-Xbootclasspath/a:" lein-jar)
       "-XX:+TieredCompilation"
       "-XX:TieredStopAtLevel=1"
@@ -89,28 +113,6 @@
             (list "cd" project ";")
             (niclein/lein-process-command "compile"))))))
 
-(defconst lein-version "2.5.1"
-  "The version of lein we will retrieve.")
-
-(defconst lein-url
-  (concat "https://github.com/technomancy/leiningen/releases/download/"
-          lein-version
-          "/leiningen-" lein-version "-standalone.zip"))
-
-(defgroup niclein nil
-  "Simple leiningen management for Clojure."
-  :group 'clojure-mode)
-
-(defcustom niclein-java "java"
-  "What Java should we use?"
-  :group 'niclein
-  :type 'file)
-
-(defvar niclein/prompt-marker nil
-  "Where the prompt is in a repl buffer.")
-
-(defvar niclein/prompt-entry-marker nil
-  "Where text entry for the prompt should be in a repl buffer.")
 
 
 ;;; Commands
