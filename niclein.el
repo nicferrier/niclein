@@ -4,7 +4,7 @@
 
 ;; Author: Nic Ferrier <nferrier@ferrier.me.uk>
 ;; Keywords: languages, lisp
-;; Version: 0.0.21
+;; Version: 0.0.22
 ;; Package-requires: ((shadchen "1.4")(smartparens "1.5")(s "1.9.0"))
 ;; Url: https://github.com/nicferrier/niclein
 
@@ -274,6 +274,21 @@ Also initiates `show-paren-mode' and `smartparens-mode'.")
               lines)))
     (goto-char niclein/prompt-entry-marker)))
 
+(defun niclein/lein-process-sentinel (proc evt)
+  (let ((msg (cond
+               ((equal evt "finished\n") "*finished*")
+               ((equal evt "killed\n") "*killed*")
+               (t nil))))
+    (if (not (stringp msg))
+        (message "niclein process ended with %s" evt)
+        ;; Else we know what it is - spit the message out
+        (niclein-pop-lein (process-buffer proc))
+        (with-current-buffer (process-buffer proc)
+          (goto-char (point-max))
+          (let (buffer-read-only)
+            (insert msg)
+            (newline))))))
+
 ;;; the window batch file for this is:
 ;;; @echo off
 ;;; java -classpath C:/users/43870810/.lein/self-installs/leiningen.jar clojure.main -m leiningen.core.main %*
@@ -312,22 +327,30 @@ process.")
   "Pop the lein buffer into view."
   (interactive)
   (let ((buf (or lein-buffer (process-buffer (symbol-value 'niclein-lein-proc)))))
-    (pop-to-buffer buf t)
+    (unless (equal (current-buffer) buf)
+      (pop-to-buffer buf t))
     (with-current-buffer buf
       (goto-char (point-max)))))
 
 ;;;###autoload
 (defun niclein-deps (project)
   "Run the deps command in the project."
-  (interactive (list (or (locate-dominating-file
-                          default-directory "project.clj")
+  (interactive (list (or (expand-file-name
+                          (locate-dominating-file
+                           default-directory "project.clj"))
                          default-directory)))
-  (let ((proc
-         (niclein/lein-process
-          (format "*niclein-deps-%s*" project)
-          (get-buffer-create (format "*niclein-deps-%s*" project))
-          "deps")))
-    (niclein-pop-lein (process-buffer proc))))
+  (let* ((proj (expand-file-name project)) ; so we can use it from eshell
+         (buf (get-buffer-create (format "*niclein-deps-%s*" proj)))
+         (start-pt (with-current-buffer buf (point)))
+         (proc
+          (niclein/lein-process
+           (format "*niclein-deps-%s*" proj)
+           buf "deps")))
+    (set-process-sentinel proc 'niclein/lein-process-sentinel)
+    (niclein-pop-lein (process-buffer proc))
+    (with-current-buffer buf
+      (niclein-clojure-output-mode)
+      (buffer-substring start-pt (point)))))
 
 
 (defconst niclein/lein-commands
@@ -340,20 +363,32 @@ process.")
     uberjar    update-in    upgrade    vcs    version    with-profile)
   "List of lein commands.") ; we should really generate this from lein
 
-(defun niclein-command (project command)
+(defun niclein-command (project command &rest args)
   "Run any lein COMMAND in PROJECT."
   (interactive
-   (list (or (locate-dominating-file
-              default-directory "project.clj")
+   (list (or (expand-file-name
+              (locate-dominating-file
+               default-directory "project.clj"))
              default-directory)
          (let ((commands (--map (cons it it) niclein/lein-commands)))
            (completing-read "lein command: " commands))))
-  (let ((proc
-         (niclein/lein-process
-          (format "*niclein-%s-%s*" command project)
-          (get-buffer-create (format "*niclein-%s-%s*" command project))
-          command)))
-    (niclein-pop-lein (process-buffer proc))))
+  (let* ((proj (expand-file-name project)) ; so we can use from eshell
+         (buf (get-buffer-create (format "*niclein-%s-%s*" command proj)))
+         (proc
+          (apply
+           'niclein/lein-process
+           (append
+            (list
+             (format "*niclein-%s-%s*" command proj)
+             (with-current-buffer buf
+               (niclein-clojure-output-mode)
+               (current-buffer)))
+            (cons command args))))
+         (start-pt (with-current-buffer buf (point))))
+    (set-process-sentinel proc 'niclein/lein-process-sentinel)
+    (niclein-pop-lein (process-buffer proc))
+    (with-current-buffer buf
+      (buffer-substring start-pt (point)))))
 
 (defun niclein/output-mode-clear ()
   "Clear the output."
@@ -488,7 +523,51 @@ reference to it."
       (let* ((source-buffer (current-buffer))
              (repl-buf (format "*niclein-repl-%s*" (buffer-name)))
              (proc (niclein/lein-process
-                    "*niclein*" repl-buf "repl")))
+                    "*niclein*" repl-buf
+                    "repl"
+                    ;;"run" "-m" "clojure.main/main"
+                    )))
+        (setq niclein-lein-proc proc)
+        (niclein-pop-lein (process-buffer proc))
+        (niclein-mode)
+        ;; Set up the repl buffer with a bottom prompt
+        (with-current-buffer (process-buffer proc)
+          (setq niclein/prompt-marker (point-marker))
+          (set-marker-insertion-type niclein/prompt-marker nil)
+          (goto-char niclein/prompt-marker)
+          (insert "=> ")
+          (set-marker-insertion-type niclein/prompt-marker t)
+          (setq niclein/prompt-entry-marker (point-marker))
+          (set-marker-insertion-type niclein/prompt-entry-marker nil))
+        (with-current-buffer source-buffer
+          (niclein-interaction))
+        (set-process-filter proc 'niclein/proc-filter))))
+
+(defun niclein-fast-start ()
+  "Start a leiningen repl in a process.
+
+The process will have a rudimentary cli for entering leiningen
+repl commands.  A simple history system is implemented using # as
+a prefix key:
+
+\\{niclein-keymap}
+
+Each repl buffer has it's own history.
+
+The repl is run in `niclein-mode'.
+
+Once the repl is started `niclein-lein-buffer' will contain a
+reference to it."
+  (interactive)
+  (if (process-live-p niclein-lein-proc)
+      (progn
+        (message "%s already has a lein process" (buffer-name))
+        (niclein-pop-lein (process-buffer niclein-lein-proc)))
+      ;; Else
+      (let* ((source-buffer (current-buffer))
+             (repl-buf (format "*niclein-repl-%s*" (buffer-name)))
+             (proc (niclein/lein-process
+                    "*niclein*" repl-buf "run" "-m" "clojure.main")))
         (setq niclein-lein-proc proc)
         (niclein-pop-lein (process-buffer proc))
         (niclein-mode)
