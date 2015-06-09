@@ -4,7 +4,7 @@
 
 ;; Author: Nic Ferrier <nferrier@ferrier.me.uk>
 ;; Keywords: languages, lisp
-;; Version: 0.0.22
+;; Version: 0.0.23
 ;; Package-requires: ((shadchen "1.4")(smartparens "1.5")(s "1.9.0"))
 ;; Url: https://github.com/nicferrier/niclein
 
@@ -68,10 +68,11 @@
 
 (defvar niclein/prompt-marker nil
   "Where the prompt is in a repl buffer.")
+(make-variable-buffer-local 'niclein/prompt-marker)
 
 (defvar niclein/prompt-entry-marker nil
   "Where text entry for the prompt should be in a repl buffer.")
-
+(make-variable-buffer-local 'niclein/prompt-entry-marker)
 
 (defgroup clojure-custard-mode nil
   "Customize group for stuff not customizable in clojure-mode.")
@@ -80,6 +81,11 @@
   "Hook for clojure-custard-mode."
   :type 'hook
   :group 'clojure-custard-mode)
+
+(defconst niclein-jvm-args
+  '("-XX:+PrintGC"
+    "-XX:+PrintGCDateStamps"
+    "-Xloggc:gc.log"))
 
 (defun niclein/lein-process-command (&rest cmd)
   "Construct the Java leiningen command from CMD."
@@ -92,7 +98,9 @@
       niclein-java
       (concat "-Xbootclasspath/a:" lein-jar)
       "-XX:+TieredCompilation"
-      "-XX:TieredStopAtLevel=1"
+      "-XX:TieredStopAtLevel=1")
+     niclein-jvm-args
+     (list
       (concat "-Dleiningen.original.pwd=" default-directory)
       "-classpath" lein-jar
       "clojure.main" "-m" "leiningen.core.main")
@@ -242,16 +250,18 @@ COMMAND is read from the prompt if we're in interactive mode."
 (define-generic-mode niclein-mode
   '(";")
   nil
-  nil
+  nil ;;'(("http://[^ \n	]+" 'link))
   nil
   (list
    (lambda ()
      (show-paren-mode)
      (smartparens-mode)
+     (goto-address-mode)
      (setq-local niclein/hist (niclein/cli)) ; appears to work even tho it's a const
      (niclein/init-map)
      (local-set-key (kbd "#") 'niclein-cli-read)
      (local-set-key (kbd "C-a") 'niclein/buffer-cli-bol)
+     (local-set-key (kbd "C-o") 'goto-address-at-point)
      (local-set-key (kbd "RET") 'niclein/send-command)))
   "A mode for niclein.
 
@@ -267,11 +277,17 @@ Also initiates `show-paren-mode' and `smartparens-mode'.")
               (->> raw-lines
                 (--take-while (not (string-match "^\\([a-zA-Z.-]+\\)=> +$" it)))
                 (--map (replace-regexp-in-string " +\\(#_=>\\)" "\n\\1" it))
-               (-flatten))))
+                (-flatten)))
+             ;; We try and handle the last line not being "\n"
+             (lines-reversed (reverse lines))
+             (last-line (car lines-reversed))
+             (most-lines (reverse (cdr lines-reversed))))
         (mapc (lambda (l)
                 (goto-char niclein/prompt-marker)
                 (insert (concat l "\n")))
-              lines)))
+              most-lines)
+        (goto-char niclein/prompt-marker)
+        (insert last-line)))
     (goto-char niclein/prompt-entry-marker)))
 
 (defun niclein/lein-process-sentinel (proc evt)
