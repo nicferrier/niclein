@@ -201,7 +201,7 @@ COMMAND is read from the prompt if we're in interactive mode."
   (when (and command (not (equal command "")))
     (save-excursion
       (goto-char (line-beginning-position))
-      (insert ";" command " >\n"))
+      (insert ";" command " >\n\n"))
     (funcall niclein/hist :new command)
     (process-send-string process (format "%s\n" command))))
 
@@ -283,10 +283,10 @@ Also initiates `show-paren-mode' and `smartparens-mode'.")
              (last-line (car lines-reversed))
              (most-lines (reverse (cdr lines-reversed))))
         (mapc (lambda (l)
-                (goto-char niclein/prompt-marker)
+                (goto-char (- niclein/prompt-marker 1))
                 (insert (concat l "\n")))
               most-lines)
-        (goto-char niclein/prompt-marker)
+        (goto-char (- niclein/prompt-marker 1))
         (insert last-line)))
     (goto-char niclein/prompt-entry-marker)))
 
