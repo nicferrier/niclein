@@ -275,7 +275,7 @@ Also initiates `show-paren-mode' and `smartparens-mode'.")
       (let* ((raw-lines (split-string data "\n"))
              (lines
               (->> raw-lines
-                (--take-while (not (string-match "^\\([a-zA-Z.-]+\\)=> +$" it)))
+                (--take-while (not (string-match "^\\([a-zA-Z.-][a-zA-Z.0-9-]+\\)=> +$" it)))
                 (--map (replace-regexp-in-string " +\\(#_=>\\)" "\n\\1" it))
                 (-flatten)))
              ;; We try and handle the last line not being "\n"
