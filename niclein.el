@@ -106,6 +106,12 @@
       "clojure.main" "-m" "leiningen.core.main")
      cmd)))
 
+(defconst niclein/clojure-projects
+  (make-hash-table :test 'equal)
+  "Hash of clojure project filenames that have repls.
+
+We use this to associate repl processes with files in the same project.")
+
 ;;;###autoload
 (define-derived-mode
   clojure-custard-mode clojure-mode "Clojure"
@@ -114,13 +120,16 @@
   ;; Body
   (let ((project
          (locate-dominating-file default-directory "project.clj")))
+    ;; this is setting compile-command for all buffers... not sure why?
     (setq compile-command
           (s-join
            " "
            (append
             (list "cd" project ";")
-            (niclein/lein-process-command "compile"))))))
-
+            (niclein/lein-process-command "compile"))))
+    (when (gethash project niclein/clojure-projects)
+      (setq niclein-lein-proc (gethash project niclein/clojure-projects))
+      (niclein-interaction))))
 
 
 ;;; Commands
@@ -293,7 +302,7 @@ Also initiates `show-paren-mode' and `smartparens-mode'.")
               (newline)))
         (goto-char (- niclein/prompt-marker 1))
         ;; Check for errors
-        (if (string-match "^\\([a-zA-Z].*?\\) \\(.*\\) \\((.*)\\)" last-line)
+        (if (string-match "^\\([a-zA-Z].*?\\) \\(.*\\)\\((.*)\\)" last-line)
             (let ((exception (match-string 1 last-line))
                   (message (match-string 2 last-line))
                   (source-file (match-string 3 last-line)))
@@ -555,12 +564,14 @@ reference to it."
         (niclein-pop-lein (process-buffer niclein-lein-proc)))
       ;; Else
       (let* ((source-buffer (current-buffer))
+             (project (locate-dominating-file default-directory "project.clj"))
              (repl-buf (format "*niclein-repl-%s*" (buffer-name)))
              (proc (niclein/lein-process
                     "*niclein*" repl-buf
                     "repl"
                     ;;"run" "-m" "clojure.main/main"
                     )))
+        (puthash project proc niclein/clojure-projects)
         (setq niclein-lein-proc proc)
         (niclein-pop-lein (process-buffer proc))
         (niclein-mode)
