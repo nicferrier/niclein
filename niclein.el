@@ -4,7 +4,7 @@
 
 ;; Author: Nic Ferrier <nferrier@ferrier.me.uk>
 ;; Keywords: languages, lisp
-;; Version: 0.0.28
+;; Version: 0.0.29
 ;; Package-requires: ((shadchen "1.4")(smartparens "1.5")(s "1.9.0"))
 ;; Url: https://github.com/nicferrier/niclein
 
@@ -210,7 +210,7 @@ COMMAND is read from the prompt if we're in interactive mode."
   (when (and command (not (equal command "")))
     (save-excursion
       (goto-char (line-beginning-position))
-      (insert ";" command " >\n\n"))
+      (insert ";" command " >\n"))
     (funcall niclein/hist :new command)
     (process-send-string process (format "%s\n" command))))
 
@@ -279,6 +279,14 @@ COMMAND is read from the prompt if we're in interactive mode."
 
 Also initiates `show-paren-mode' and `smartparens-mode'.")
 
+(defun niclein/proc-log (lines)
+  "A simple log for the filter, so we can see what's being filtered."
+  (with-current-buffer (get-buffer-create "*niclein-proc-log*")
+    (goto-char (point-max))
+    (princ
+     (format "%s %S\n" (buffer-name) lines)
+     (current-buffer))))
+
 (defun niclein/proc-filter (proc data)
   (with-current-buffer (process-buffer proc)
     (save-excursion
@@ -287,26 +295,33 @@ Also initiates `show-paren-mode' and `smartparens-mode'.")
               (->> raw-lines
                 (--take-while (not (string-match "^\\([a-zA-Z.-][a-zA-Z.0-9-]+\\)=> +$" it)))
                 (--map (replace-regexp-in-string " +\\(#_=>\\)" "\n\\1" it))
-                (-flatten)))
+                (-flatten)
+                (--remove (equal it ""))))
              ;; We try and handle the last line not being "\n"
              (lines-reversed (reverse lines))
              (last-line (car lines-reversed))
              (most-lines (reverse (cdr lines-reversed))))
+        (niclein/proc-log lines) ; helps with logging
         (if most-lines
-            (mapc (lambda (l)
-                    (goto-char (- niclein/prompt-marker 1))
-                    (insert (concat l "\n")))
-                  most-lines)
+            (progn
+              (goto-char (- niclein/prompt-marker 1))
+              (newline)
+              (mapc (lambda (l)
+                      (goto-char (- niclein/prompt-marker 1))
+                      (insert (concat l "\n")))
+                    most-lines))
             (progn
               (goto-char (- niclein/prompt-marker 1))
               (newline)))
         (goto-char (- niclein/prompt-marker 1))
         ;; Check for errors
-        (if (string-match "^\\([a-zA-Z].*?\\) \\(.*\\)\\((.*)\\)" last-line)
+        (if (or
+             (string-match "^\\([a-zA-Z].*?\\) \\(.*\\)\\((.*)\\)" last-line)
+             (string-match "^.*=> \\([a-zA-Z].*?\\) \\(.*\\)\\((.*)\\)" last-line))
             (let ((exception (match-string 1 last-line))
-                  (message (match-string 2 last-line))
+                  (msg (match-string 2 last-line))
                   (source-file (match-string 3 last-line)))
-              (insert (format "%s\n%s\n%s" exception message source-file)))
+              (insert (format "%s\n%s\n%s" exception msg source-file)))
             ;; Else just insert it
             (insert last-line))))
     (goto-char niclein/prompt-entry-marker)))
@@ -488,8 +503,15 @@ process.")
                     (newline)))))))))
 
 (defmacro niclein/with-lein-buffer (&rest code)
-  `(if (process-live-p niclein-lein-proc)
+  `(if (process-live-p ; check for liveness of the actual proc being used
+        (gethash
+         (locate-dominating-file default-directory "project.clj")
+         niclein/clojure-projects))
        (progn
+         (setq niclein-lein-proc
+               (gethash
+                (locate-dominating-file default-directory "project.clj")
+                niclein/clojure-projects))
          (progn ,@code)
          (niclein-pop-lein (process-buffer niclein-lein-proc)))
        (message "%s has no lein process - use M-x niclein-start" (buffer-name))))
@@ -499,15 +521,20 @@ process.")
   (niclein/with-lein-buffer
    (process-send-string
     niclein-lein-proc
-    (concat
-     (let* ((ns-decl
-             (save-excursion
-               (goto-char (point-min))
-               (read (current-buffer))))
-            (namespace (cadr ns-decl)))
-       (format "(in-ns '%s)" namespace))
-     (buffer-substring-no-properties start end)
-     "\n"))))
+    (let* ((ns-decl
+            (save-excursion
+              (goto-char (point-min))
+              (read (current-buffer))))
+           (namespace (cadr ns-decl))
+           (form
+            (format
+             ;;"(let [cns *ns*] (try (in-ns '%s)  %s (finally (in-ns cns))))\n"
+             "(binding [*ns* (find-ns '%s)](eval '%s))\n"
+             ;;"(let [cns '%s]) %s\n"
+             namespace
+             (buffer-substring-no-properties start end))))
+      ;;(message form)
+      form))))
 
 (defun niclein-eval-defun (pt)
   "Eval the current clojure defn or def."
@@ -673,5 +700,12 @@ reference to it."
     (niclein-pop-lein (process-buffer proc))))
 
 (provide 'niclein)
+
+;; TODO
+
+;; completion - http://stackoverflow.com/questions/2747294/how-to-list-the-functions-of-a-namespace
+;; basically it's this:
+;;
+;;  (keys (ns-publics 'foo))
 
 ;;; niclein.el ends here
