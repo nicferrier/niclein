@@ -4,7 +4,7 @@
 
 ;; Author: Nic Ferrier <nferrier@ferrier.me.uk>
 ;; Keywords: languages, lisp
-;; Version: 0.0.25
+;; Version: 0.0.27
 ;; Package-requires: ((shadchen "1.4")(smartparens "1.5")(s "1.9.0"))
 ;; Url: https://github.com/nicferrier/niclein
 
@@ -282,12 +282,23 @@ Also initiates `show-paren-mode' and `smartparens-mode'.")
              (lines-reversed (reverse lines))
              (last-line (car lines-reversed))
              (most-lines (reverse (cdr lines-reversed))))
-        (mapc (lambda (l)
-                (goto-char (- niclein/prompt-marker 1))
-                (insert (concat l "\n")))
-              most-lines)
+        (if most-lines
+            (mapc (lambda (l)
+                    (goto-char (- niclein/prompt-marker 1))
+                    (insert (concat l "\n")))
+                  most-lines)
+            (progn
+              (goto-char (- niclein/prompt-marker 1))
+              (newline)))
         (goto-char (- niclein/prompt-marker 1))
-        (insert last-line)))
+        ;; Check for errors
+        (if (string-match "^\\([a-zA-Z].*?\\) \\(.*\\) \\((.*)\\)" last-line)
+            (let ((exception (match-string 1 last-line))
+                  (message (match-string 2 last-line))
+                  (source-file (match-string 3 last-line)))
+              (insert (format "%s\n%s\n%s" exception message source-file)))
+            ;; Else just insert it
+            (insert last-line))))
     (goto-char niclein/prompt-entry-marker)))
 
 (defun niclein/lein-process-sentinel (proc evt)
