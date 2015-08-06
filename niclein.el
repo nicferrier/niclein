@@ -256,6 +256,7 @@ COMMAND is read from the prompt if we're in interactive mode."
    (lambda ()
      (show-paren-mode)
      (smartparens-mode)
+     (sp-local-pair 'niclein-mode "'" nil :actions nil)
      (goto-address-mode)
      (setq-local niclein/hist (niclein/cli)) ; appears to work even tho it's a const
      (niclein/init-map)
@@ -490,6 +491,12 @@ process.")
    (process-send-string
     niclein-lein-proc
     (concat
+     (let* ((ns-decl
+             (save-excursion
+               (goto-char (point-min))
+               (read (current-buffer))))
+            (namespace (cadr ns-decl)))
+       (format "(in-ns '%s)" namespace))
      (buffer-substring-no-properties start end)
      "\n"))))
 
