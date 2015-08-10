@@ -295,6 +295,7 @@ Also initiates `show-paren-mode' and `smartparens-mode'.")
               (->> raw-lines
                 (--take-while (not (string-match "^\\([a-zA-Z.-][a-zA-Z.0-9-]+\\)=> +$" it)))
                 (--map (replace-regexp-in-string " +\\(#_=>\\)" "\n\\1" it))
+                (--map (split-string it "\n"))
                 (-flatten)
                 (--remove (equal it ""))))
              ;; We try and handle the last line not being "\n"
@@ -302,17 +303,20 @@ Also initiates `show-paren-mode' and `smartparens-mode'.")
              (last-line (car lines-reversed))
              (most-lines (reverse (cdr lines-reversed))))
         (niclein/proc-log lines) ; helps with logging
-        (if most-lines
-            (progn
-              (goto-char (- niclein/prompt-marker 1))
-              (newline)
-              (mapc (lambda (l)
-                      (goto-char (- niclein/prompt-marker 1))
-                      (insert (concat l "\n")))
-                    most-lines))
-            (progn
-              (goto-char (- niclein/prompt-marker 1))
-              (newline)))
+        (cond
+          ((not lines)) ; there are no lines
+          (most-lines
+           (progn
+             (goto-char (- niclein/prompt-marker 1))
+             (newline)
+             (mapc (lambda (l)
+                     (goto-char (- niclein/prompt-marker 1))
+                     (insert (concat l "\n")))
+                   most-lines)))
+          (t
+           (progn
+             (goto-char (- niclein/prompt-marker 1))
+             (newline))))
         (goto-char (- niclein/prompt-marker 1))
         ;; Check for errors
         (if (or
@@ -378,7 +382,13 @@ process.")
 (defun niclein-pop-lein (&optional lein-buffer)
   "Pop the lein buffer into view."
   (interactive)
-  (let ((buf (or lein-buffer (process-buffer (symbol-value 'niclein-lein-proc)))))
+  (let ((buf (or lein-buffer
+                 (process-buffer
+                  (gethash
+                   (locate-dominating-file default-directory "project.clj")
+                   niclein/clojure-projects)
+                  ;;(symbol-value 'niclein-lein-proc)
+                  ))))
     (unless (equal (current-buffer) buf)
       (pop-to-buffer buf t))
     (with-current-buffer buf
