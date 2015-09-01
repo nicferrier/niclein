@@ -308,11 +308,7 @@ Also initiates `show-paren-mode' and `smartparens-mode'.")
           (most-lines
            (progn
              (goto-char (- niclein/prompt-marker 1))
-             (newline)
-             (mapc (lambda (l)
-                     (goto-char (- niclein/prompt-marker 1))
-                     (insert (concat l "\n")))
-                   most-lines)))
+             (insert "\n" (mapconcat 'identity most-lines "\n"))))
           (t
            (progn
              (goto-char (- niclein/prompt-marker 1))
@@ -320,8 +316,8 @@ Also initiates `show-paren-mode' and `smartparens-mode'.")
         (goto-char (- niclein/prompt-marker 1))
         ;; Check for errors
         (if (or
-             (string-match "^\\([a-zA-Z].*?\\) \\(.*\\)\\((.*)\\)" last-line)
-             (string-match "^.*=> \\([a-zA-Z].*?\\) \\(.*\\)\\((.*)\\)" last-line))
+             (string-match "^\\([a-zA-Z].*?\\) \\(.*\\) \\(([A-Za-z0-9.-]+:[0-9]+)\\)" last-line)
+             (string-match "^.*=> \\([a-zA-Z].*?\\) \\(.*\\)\\(([A-Za-z0-9.-]+:[0-9]+)\\)" last-line))
             (let ((exception (match-string 1 last-line))
                   (msg (match-string 2 last-line))
                   (source-file (match-string 3 last-line)))
