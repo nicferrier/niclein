@@ -321,7 +321,7 @@ Also initiates `show-paren-mode' and `smartparens-mode'.")
             (let ((exception (match-string 1 last-line))
                   (msg (match-string 2 last-line))
                   (source-file (match-string 3 last-line)))
-              (insert (format "%s\n%s\n%s" exception msg source-file)))
+              (insert (format "\n%s\n%s\n%s" exception msg source-file)))
             ;; Else just insert it
             (insert last-line))))
     (goto-char niclein/prompt-entry-marker)))
