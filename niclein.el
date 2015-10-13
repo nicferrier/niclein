@@ -4,7 +4,7 @@
 
 ;; Author: Nic Ferrier <nferrier@ferrier.me.uk>
 ;; Keywords: languages, lisp
-;; Version: 0.0.29
+;; Version: 0.0.30
 ;; Package-requires: ((shadchen "1.4")(smartparens "1.5")(s "1.9.0"))
 ;; Url: https://github.com/nicferrier/niclein
 
@@ -85,23 +85,86 @@
 (defconst niclein-jvm-args
   '("-XX:+PrintGC"
     "-XX:+PrintGCDateStamps"
+    "-Xmx64M"
     "-Xloggc:gc.log"))
+
+(defcustom niclein-remote-box-config nil
+  "Any java and lein configuration for a remote box.
+
+A mapping of hostnames to important keys we need for remoting
+leiningen, clojure and java.
+
+For example:
+
+  user@some.host.example.com
+   :java /opt/jdk/jdk8/bin/java
+   :lein /home/me/.lein/self-installs/leiningen-2.5.1-standalone.jar
+
+Or in sexp form:
+
+  ((\"user@some.host.example.com\"
+   :java \"/opt/jdk/jdk8/bin/java\"
+   :lein \"/home/me/.lein/self-installs/leiningen-2.5.1-standalone.jar\"))
+
+When a buffer is visiting a file on host
+\"some.host.example.com\" under \"user\" then we use the java we
+find in \"/opt/jdk/jdk8/bin/java\" and the leiningen we find in
+\"/home/me/.lein\" - the full path to the leiningen is needed."
+  :group 'niclein
+  :type '(alist
+         :key-type string
+         :value-type
+          (plist
+           :options (:java :lein)
+           :value-type string)))
+
+(defun niclein/file-name->tramp-host ()
+  "Return the tramp host of the current buffer file-name
+
+If we have a host name then we can try and use remote java."
+  (let ((file-name
+         (with-current-buffer (current-buffer)
+           buffer-file-name)))
+    (when (and file-name
+               (string-match "^/[a-zA-Z]+:\\([a-zA-Z0-9-]+@[^:]+\\):.*" file-name))
+      (match-string 1 file-name))))
+
+(defconst niclein/ssh-path
+  (->> (shell-command-to-string "which plink")
+    (replace-regexp-in-string "[\n]$" "")
+    (replace-regexp-in-string "^/c/" "/")))
 
 (defun niclein/lein-process-command (&rest cmd)
   "Construct the Java leiningen command from CMD."
-  (let ((lein-jar
-         (expand-file-name
-          "leiningen-2.5.1-standalone.jar"
-          "~/.lein/self-installs")))
+  (let* ((tramp-host (niclein/file-name->tramp-host))
+         (remote-config (kva tramp-host niclein-remote-box-config))
+         (java
+          (if tramp-host
+              (list niclein/ssh-path "-t" tramp-host
+                    (format "http_proxy=%s" (getenv "http_proxy"))
+                    (plist-get remote-config :java))
+              ;; Else
+              (list niclein-java)))
+         (lein-jar
+          (if tramp-host
+              (plist-get remote-config :lein)
+              (expand-file-name "leiningen-2.5.1-standalone.jar" "~/.lein/self-installs"))))
     (append
+     java
      (list
-      niclein-java
       (concat "-Xbootclasspath/a:" lein-jar)
       "-XX:+TieredCompilation"
       "-XX:TieredStopAtLevel=1")
      niclein-jvm-args
      (list
-      (concat "-Dleiningen.original.pwd=" default-directory)
+      (concat
+       "-Dleiningen.original.pwd="
+       (if tramp-host
+           (progn
+             (string-match ".*:[^/]+\\(.*\\)" default-directory)
+             (match-string 1 default-directory))
+           ;; Else it's just the current dir
+           default-directory))
       "-classpath" lein-jar
       "clojure.main" "-m" "leiningen.core.main")
      cmd)))
@@ -279,13 +342,56 @@ COMMAND is read from the prompt if we're in interactive mode."
 
 Also initiates `show-paren-mode' and `smartparens-mode'.")
 
+(defun niclein/kva (alist key)
+  (kva key alist))
+
+(defun niclein/format (object fmt-spec)
+  (format fmt-spec object))
+
+(defmacro niclein: (&rest args))
+
+(defconst niclein/json-repl nil
+  "Toggle for the json style repl.
+
+Requires that clojure send you stuff wrapped in a JSON repl, like:
+
+ (defmacro repl-thing [& expr]
+   `(let [output (java.io.StringWriter.)
+          result (binding [*out* output]
+                   (print \"hello world\n\")
+                   (+ 12 10))]
+      (json/write-str
+       {:output (.toString output)
+        :result result})))
+
+I think clojure already sends JSON maybe. Not sure.")
+
 (defun niclein/proc-log (lines)
   "A simple log for the filter, so we can see what's being filtered."
   (with-current-buffer (get-buffer-create "*niclein-proc-log*")
     (goto-char (point-max))
     (princ
      (format "%s %S\n" (buffer-name) lines)
-     (current-buffer))))
+     (current-buffer)))
+  (when niclein/json-repl
+    (with-current-buffer (get-buffer-create "*niclein-testout*")
+      (goto-char (point-max))
+      (let* ((outlines
+              (->> lines
+                (--remove (string-match-p "^#_=>$" it))
+                (--map (let ((m (string-match "^#_=> " it)))
+                         (if m
+                             (replace-match "" nil nil it)
+                             it)))))
+             (json-key-type 'keyword))
+        (-> (mapconcat 'identity outlines "")
+          (json-read-from-string)
+          (json-read-from-string)
+          (niclein/kva :result)
+          (niclein/format "%S")
+          (insert)))
+      (niclein:
+       (switch-to-buffer-other-window "*niclein-testout*")))))
 
 (defun niclein/proc-filter (proc data)
   (with-current-buffer (process-buffer proc)
@@ -359,9 +465,9 @@ Also initiates `show-paren-mode' and `smartparens-mode'.")
                  default-directory "project.clj")
                 default-directory))
              (tmpfile (make-temp-file "lein"))
-             (args
-              (append (list name buffer)
-                      (apply 'niclein/lein-process-command cmd))))
+             (lein-cmd (apply 'niclein/lein-process-command cmd))
+             (args (append (list name buffer) lein-cmd)))
+        (message "niclein running on %s with %S" buffer lein-cmd)
         ;;(setenv "TRAMPOLINE_FILE" tmpfile)
         ;;(setenv "LEIN_FAST_TRAMPOLINE" "y")
         ;;(message "running lein with %s" (append args cmd))
@@ -601,9 +707,7 @@ reference to it."
              (repl-buf (format "*niclein-repl-%s*" (buffer-name)))
              (proc (niclein/lein-process
                     "*niclein*" repl-buf
-                    "repl"
-                    ;;"run" "-m" "clojure.main/main"
-                    )))
+                    "repl")))
         (puthash project proc niclein/clojure-projects)
         (setq niclein-lein-proc proc)
         (niclein-pop-lein (process-buffer proc))
