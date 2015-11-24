@@ -129,19 +129,29 @@ If we have a host name then we can try and use remote java."
                (string-match "^/[a-zA-Z]+:\\([a-zA-Z0-9-]+@[^:]+\\):.*" file-name))
       (match-string 1 file-name))))
 
-(defconst niclein/ssh-path
-  (->> (shell-command-to-string "which plink")
-    (replace-regexp-in-string "[\n]$" "")
-    (replace-regexp-in-string "^/c/" "/")))
+(defconst niclein/ssh-jar
+  (expand-file-name "~/work/nic-ssh/target/uberjar/nic-ssh.jar")
+  "Where's my jar file that does an ssh client?")
 
 (defun niclein/lein-process-command (&rest cmd)
   "Construct the Java leiningen command from CMD."
+  ;; this needs the nicexec bash file:
+  ;;
+  ;; PATH=$PATH:/opt/eFX/apps/evolve/java/jdk1.8.0_25/bin
+  ;; cd $1
+  ;; shift
+  ;; exec $*
   (let* ((tramp-host (niclein/file-name->tramp-host))
+         (tramp-directory
+          (when tramp-host
+            (string-match ".*:[^/]+\\(.*\\)" default-directory)
+            (match-string 1 default-directory)))
          (remote-config (kva tramp-host niclein-remote-box-config))
          (java
           (if tramp-host
-              (list niclein/ssh-path "-t" tramp-host
-                    (format "http_proxy=%s" (getenv "http_proxy"))
+              (list niclein-java "-jar" niclein/ssh-jar  tramp-host
+                    "bash" "nicexec" tramp-directory
+                    ;;(format "http_proxy=%s" (getenv "http_proxy"))
                     (plist-get remote-config :java))
               ;; Else
               (list niclein-java)))
@@ -157,14 +167,10 @@ If we have a host name then we can try and use remote java."
       "-XX:TieredStopAtLevel=1")
      niclein-jvm-args
      (list
+      "-Djline.terminal=dumb" ;;"-Djline.internal.Log.debug=true"
       (concat
        "-Dleiningen.original.pwd="
-       (if tramp-host
-           (progn
-             (string-match ".*:[^/]+\\(.*\\)" default-directory)
-             (match-string 1 default-directory))
-           ;; Else it's just the current dir
-           default-directory))
+       (or tramp-directory default-directory))
       "-classpath" lein-jar
       "clojure.main" "-m" "leiningen.core.main")
      cmd)))
@@ -459,19 +465,19 @@ I think clojure already sends JSON maybe. Not sure.")
          'start-process
          (append (list name buffer "lein") cmd))
         ;; Else use java directly
-      (let* ((default-directory
-              (or
-                (locate-dominating-file
-                 default-directory "project.clj")
-                default-directory))
-             (tmpfile (make-temp-file "lein"))
-             (lein-cmd (apply 'niclein/lein-process-command cmd))
-             (args (append (list name buffer) lein-cmd)))
-        (message "niclein running on %s with %S" buffer lein-cmd)
-        ;;(setenv "TRAMPOLINE_FILE" tmpfile)
-        ;;(setenv "LEIN_FAST_TRAMPOLINE" "y")
-        ;;(message "running lein with %s" (append args cmd))
-        (apply 'start-process args)))))
+        (let* ((default-directory
+                (or
+                 (locate-dominating-file
+                  default-directory "project.clj")
+                 default-directory))
+               (tmpfile (make-temp-file "lein"))
+               (lein-cmd (apply 'niclein/lein-process-command cmd))
+               (args (append (list name buffer) lein-cmd)))
+          (message "niclein running on %s with %S" buffer lein-cmd)
+          ;;(setenv "TRAMPOLINE_FILE" tmpfile)
+          ;;(setenv "LEIN_FAST_TRAMPOLINE" "y")
+          ;;(message "running lein with %s" (append args cmd))
+          (apply 'start-process args)))))
 
 (defvar niclein-lein-proc nil
   "The inferiror lein process for a clojure buffer.
@@ -485,12 +491,11 @@ process.")
   "Pop the lein buffer into view."
   (interactive)
   (let ((buf (or lein-buffer
+                 (process-buffer niclein-lein-proc)
                  (process-buffer
                   (gethash
                    (locate-dominating-file default-directory "project.clj")
-                   niclein/clojure-projects)
-                  ;;(symbol-value 'niclein-lein-proc)
-                  ))))
+                   niclein/clojure-projects)))))
     (unless (equal (current-buffer) buf)
       (pop-to-buffer buf t))
     (with-current-buffer buf
@@ -527,6 +532,8 @@ process.")
     uberjar    update-in    upgrade    vcs    version    with-profile)
   "List of lein commands.") ; we should really generate this from lein
 
+(defvar niclein/command-hist nil)
+
 (defun niclein-command (project command &rest args)
   "Run any lein COMMAND in PROJECT."
   (interactive
@@ -535,7 +542,7 @@ process.")
                default-directory "project.clj"))
              default-directory)
          (let ((commands (--map (cons it it) niclein/lein-commands)))
-           (completing-read "lein command: " commands))))
+           (completing-read "lein command: " commands nil nil nil 'niclein/command-hist))))
   (let* ((proj (expand-file-name project)) ; so we can use from eshell
          (buf (get-buffer-create (format "*niclein-%s-%s*" command proj)))
          (proc
@@ -628,25 +635,27 @@ process.")
          (niclein-pop-lein (process-buffer niclein-lein-proc)))
        (message "%s has no lein process - use M-x niclein-start" (buffer-name))))
 
+(defun niclein/munge-clj-ns (start end)
+  (let* ((ns-decl
+          (save-excursion
+            (goto-char (point-min))
+            (read (current-buffer))))
+         (namespace (cadr ns-decl))
+         (form
+          (format
+           ;;"(let [cns *ns*] (try (in-ns '%s)  %s (finally (in-ns cns))))\n"
+           "(binding [*ns* (find-ns '%s)](eval '%s))\n"
+           ;;"(let [cns '%s]) %s\n"
+           namespace
+           (buffer-substring-no-properties start end))))
+    form))
+
 (defun niclein-eval-region (start end)
   (interactive "r")
   (niclein/with-lein-buffer
    (process-send-string
     niclein-lein-proc
-    (let* ((ns-decl
-            (save-excursion
-              (goto-char (point-min))
-              (read (current-buffer))))
-           (namespace (cadr ns-decl))
-           (form
-            (format
-             ;;"(let [cns *ns*] (try (in-ns '%s)  %s (finally (in-ns cns))))\n"
-             "(binding [*ns* (find-ns '%s)](eval '%s))\n"
-             ;;"(let [cns '%s]) %s\n"
-             namespace
-             (buffer-substring-no-properties start end))))
-      ;;(message form)
-      form))))
+    (niclein/munge-clj-ns start end))))
 
 (defun niclein-eval-defun (pt)
   "Eval the current clojure defn or def."
