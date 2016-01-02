@@ -402,41 +402,46 @@ I think clojure already sends JSON maybe. Not sure.")
 (defun niclein/proc-filter (proc data)
   (with-current-buffer (process-buffer proc)
     (save-excursion
-      (let* ((raw-lines (split-string data "\n"))
+      (let* ((is-complete (string-match-p "^\\([a-zA-Z.-][a-zA-Z.0-9-]+\\)=> +$" data))
+             (raw-lines (split-string data "\n"))
              (lines
               (->> raw-lines
                 (--take-while (not (string-match "^\\([a-zA-Z.-][a-zA-Z.0-9-]+\\)=> +$" it)))
-                (--map (replace-regexp-in-string " +\\(#_=>\\)" "\n\\1" it))
-                (--map (split-string it "\n"))
+                (--map (replace-regexp-in-string " +\\(#_=>\\)" "#_=>" it))
                 (-flatten)
                 (--remove (equal it ""))))
+             (lines-joined (mapconcat 'identity lines "\n"))
              ;; We try and handle the last line not being "\n"
              (lines-reversed (reverse lines))
-             (last-line (car lines-reversed))
-             (most-lines (reverse (cdr lines-reversed))))
+             (last-line (car lines-reversed)))
         (niclein/proc-log lines) ; helps with logging
-        (cond
-          ((not lines)) ; there are no lines
-          (most-lines
-           (progn
-             (goto-char (- niclein/prompt-marker 1))
-             (insert "\n" (mapconcat 'identity most-lines "\n"))))
-          (t
-           (progn
-             (goto-char (- niclein/prompt-marker 1))
-             (newline))))
-        (goto-char (- niclein/prompt-marker 1))
-        ;; Check for errors
+        ;; Better handling of the process output using state variables
         (if (or
-             (string-match "^\\([a-zA-Z].*?\\) \\(.*\\) \\(([A-Za-z0-9.-]+:[0-9]+)\\)" last-line)
-             (string-match "^.*=> \\([a-zA-Z].*?\\) \\(.*\\)\\(([A-Za-z0-9.-]+:[0-9]+)\\)" last-line))
+             (string-match ".*\\(CompilerException\\) \\([^:]+\\): \\(.*\\)\\(.*\\)$" last-line)
+             (string-match "^\\([a-zA-Z].*?\\) \\(.*\\) \\(([A-Za-z0-9.-]+:[0-9]+.*)\\)" last-line)
+             (string-match "^.*=> \\([a-zA-Z].*?\\) \\(.*\\)\\(([A-Za-z0-9.-]+:[0-9]+.*)\\)" last-line))
             (let ((exception (match-string 1 last-line))
                   (msg (match-string 2 last-line))
                   (source-file (match-string 3 last-line)))
+              (goto-char niclein/prompt-marker) 
               (insert (format "\n%s\n%s\n%s" exception msg source-file)))
-            ;; Else just insert it
-            (insert last-line))))
+            ;; Else it's not an exception...
+            (goto-char
+             (if (process-get proc :last-complete)
+                 niclein/prompt-marker
+                 (or (process-get proc :end-position)
+                     niclein/prompt-marker)))
+            (insert lines-joined))
+        (when is-complete
+          (goto-char niclein/prompt-marker)
+          (insert "\n"))
+        ;; Record the state
+        (process-put proc :end-position (point))
+        (process-put proc :last-complete is-complete)
+        ;; Always go to the prompt
+        (goto-char (- niclein/prompt-marker 1))))
     (goto-char niclein/prompt-entry-marker)))
+
 
 (defun niclein/lein-process-sentinel (proc evt)
   (let ((msg (cond
@@ -650,12 +655,20 @@ process.")
            (buffer-substring-no-properties start end))))
     form))
 
+(defun niclein/send-log (line)
+  "Keep a log of what we're sending to various processes."
+  (with-current-buffer (get-buffer-create "*niclein-send-proc-log*")
+    (goto-char (point-max))
+    (princ
+     (format "%s %s\n" (buffer-name) line)
+     (current-buffer))))
+
 (defun niclein-eval-region (start end)
   (interactive "r")
-  (niclein/with-lein-buffer
-   (process-send-string
-    niclein-lein-proc
-    (niclein/munge-clj-ns start end))))
+  (let ((munged (niclein/munge-clj-ns start end)))
+    (niclein/send-log munged)
+    (niclein/with-lein-buffer
+     (process-send-string niclein-lein-proc munged))))
 
 (defun niclein-eval-defun (pt)
   "Eval the current clojure defn or def."
