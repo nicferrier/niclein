@@ -85,7 +85,7 @@
 (defconst niclein-jvm-args
   '("-XX:+PrintGC"
     "-XX:+PrintGCDateStamps"
-    "-Xmx64M"
+    "-Xmx128M"
     "-Xloggc:gc.log"))
 
 (defcustom niclein-remote-box-config nil
@@ -424,7 +424,7 @@ I think clojure already sends JSON maybe. Not sure.")
                   (msg (match-string 2 last-line))
                   (source-file (match-string 3 last-line)))
               (goto-char niclein/prompt-marker) 
-              (insert (format "\n%s\n%s\n%s" exception msg source-file)))
+              (insert (format "\n%s\n%s\n%s\n" exception msg source-file)))
             ;; Else it's not an exception...
             (goto-char
              (if (process-get proc :last-complete)
@@ -491,6 +491,13 @@ If a lein repl is started, this variable will point to the
 process.")
 
 (make-variable-buffer-local 'niclein-lein-proc)
+
+(defun niclein-kill-me ()
+  (interactive)
+  (if (process-p niclein-lein-proc)
+      (delete-process niclein-lein-proc)
+      ;; Else
+      (message "niclein - could not fine a niclein lein process - niclein-lein-proc")))
 
 (defun niclein-pop-lein (&optional lein-buffer)
   "Pop the lein buffer into view."
