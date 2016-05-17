@@ -17,3 +17,5 @@ prefix key ("#" currently, "##" will insert a "#") is used to allow
 scrolling up and down through the history.
 
 The command line has smartparens support but no completion.
+
+I wonder if you can pull things from places.
