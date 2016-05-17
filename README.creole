@@ -18,4 +18,3 @@ scrolling up and down through the history.
 
 The command line has smartparens support but no completion.
 
-I wonder if you can pull things from places.
