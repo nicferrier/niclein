@@ -4,7 +4,7 @@
 
 ;; Author: Nic Ferrier <nferrier@ferrier.me.uk>
 ;; Keywords: languages, lisp
-;; Version: 0.0.31
+;; Version: 0.0.32
 ;; Package-requires: ((shadchen "1.4")(smartparens "1.5")(s "1.9.0"))
 ;; Url: https://github.com/nicferrier/niclein
 
@@ -48,6 +48,7 @@
 (require 'url) ; for retrieving leiningen if we need it
 (require 'clojure-mode)
 (require 's)
+(require 'kv)
 
 (defconst lein-version "2.5.1"
   "The version of lein we will retrieve.")
@@ -837,6 +838,50 @@ reference to it."
                          "help") (when sub-command
                                    (list sub-command))))))
     (niclein-pop-lein (process-buffer proc))))
+
+
+(defun niclein/tree (src-dir)
+  (let* ((dir (expand-file-name src-dir))
+         (content (directory-files dir t "^[^.].*")))
+    (append
+     content
+     (->> content
+       (--filter (file-directory-p it))
+       (--map (niclein/tree it))))))
+
+(defun niclein/all-files (src-dir &optional regex-filter)
+  (let ((all (-flatten (niclein/tree src-dir))))
+    (if regex-filter
+        (--filter (string-match-p regex-filter it) all)
+        all)))
+
+(defun niclein/index ()
+  (let* ((project-file (locate-dominating-file (buffer-file-name) "project.clj"))
+         (project-dir (file-name-directory project-file))
+         (files (niclein/all-files project-dir "\\(.*\\.clj$\\|/resources/.*\\)")))
+    (--map (cons (file-name-nondirectory it) it) files)))
+
+(defun niclein/find-file-prompt ()
+  (let ((index (niclein/index)))
+    (list
+     (completing-read "File in project: " index)
+     index)))
+
+(defun niclein-find-file (filename project-index)
+  "Find FILENAME with completion via the PROJECT-INDEX.
+
+PROJECT-INDEX is constructed with `niclein/index'."
+  (interactive (niclein/find-file-prompt))
+  (let ((file (kva filename project-index)))
+    (find-file file)))
+
+(defun niclein-find-file-other-window (filename project-index)
+  (interactive (niclein/find-file-prompt))
+  (let ((file (kva filename project-index)))
+    (find-file-other-window file)))
+
+(define-key clojure-mode-map (kbd "C-c f") 'niclein-find-file)
+(define-key clojure-mode-map (kbd "C-c 4 f") 'niclein-find-file-other-window)
 
 (provide 'niclein)
 
