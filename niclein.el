@@ -4,7 +4,7 @@
 
 ;; Author: Nic Ferrier <nferrier@ferrier.me.uk>
 ;; Keywords: languages, lisp
-;; Version: 0.0.33
+;; Version: 0.0.34
 ;; Package-requires: ((shadchen "1.4")(smartparens "1.5")(s "1.9.0"))
 ;; Url: https://github.com/nicferrier/niclein
 
@@ -49,6 +49,7 @@
 (require 'clojure-mode)
 (require 's)
 (require 'kv)
+(require 'base64)
 
 (defconst lein-version "2.5.1"
   "The version of lein we will retrieve.")
@@ -855,26 +856,28 @@ reference to it."
         (--filter (string-match-p regex-filter it) all)
         all)))
 
-(defun niclein/index ()
-  (let* ((project-file (locate-dominating-file (buffer-file-name) "project.clj"))
-         (project-dir (file-name-directory project-file))
+(defun niclein/index (project-file)
+  (let* ((project-dir (file-name-directory project-file))
          (files (niclein/all-files project-dir "\\(.*\\.clj$\\|/resources/.*\\)")))
     (--map (cons (file-name-nondirectory it) it) files)))
 
 (defun niclein/index-cache ()
-  (when (equal current-prefix-arg -2)
-    (makunbound 'niclein/index-result))
-  (unless (boundp 'niclein/index-result)
-    (setq niclein/index-result
-          `((:updated . ,(current-time))
-            (:result . ,(niclein/index)))))
-  ;; Now return it
-  (kva :result niclein/index-result))
+  (let* ((dir (locate-dominating-file (buffer-file-name) "project.clj"))
+         (sym-name (concat "niclein/index-result_" (base64-encode-string dir)))
+         (symbol (intern sym-name)))
+    (when (equal current-prefix-arg -2)
+      (makunbound symbol))
+    (unless (boundp symbol)
+      (set symbol
+           `((:updated . ,(current-time))
+             (:result . ,(niclein/index)))))
+    ;; Now return it
+    (kva :result niclein/index-result)))
 
 (defun niclein/find-file-prompt ()
   (let ((index (niclein/index-cache)))
     (list
-     (completing-read "File in project: " index)
+     (completing-read "File in project: " index nil t)
      index)))
 
 (defun niclein-find-file (filename project-index)
