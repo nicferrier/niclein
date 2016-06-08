@@ -4,7 +4,7 @@
 
 ;; Author: Nic Ferrier <nferrier@ferrier.me.uk>
 ;; Keywords: languages, lisp
-;; Version: 0.0.34
+;; Version: 0.0.36
 ;; Package-requires: ((shadchen "1.4")(smartparens "1.5")(s "1.9.0"))
 ;; Url: https://github.com/nicferrier/niclein
 
@@ -840,7 +840,6 @@ reference to it."
                                    (list sub-command))))))
     (niclein-pop-lein (process-buffer proc))))
 
-
 (defun niclein/tree (src-dir)
   (let* ((dir (expand-file-name src-dir))
          (content (directory-files dir t "^[^.].*")))
@@ -856,8 +855,8 @@ reference to it."
         (--filter (string-match-p regex-filter it) all)
         all)))
 
-(defun niclein/index (project-file)
-  (let* ((project-dir (file-name-directory project-file))
+(defun niclein/index (project-file-location)
+  (let* ((project-dir (file-name-directory project-file-location))
          (files (niclein/all-files project-dir "\\(.*\\.clj$\\|/resources/.*\\)")))
     (--map (cons (file-name-nondirectory it) it) files)))
 
@@ -870,9 +869,9 @@ reference to it."
     (unless (boundp symbol)
       (set symbol
            `((:updated . ,(current-time))
-             (:result . ,(niclein/index)))))
+             (:result . ,(niclein/index dir)))))
     ;; Now return it
-    (kva :result niclein/index-result)))
+    (kva :result (symbol-value symbol))))
 
 (defun niclein/find-file-prompt ()
   (let ((index (niclein/index-cache)))
