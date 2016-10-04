@@ -523,7 +523,7 @@ process.")
 (defun niclein-pop-lein (&optional lein-buffer)
   "Pop the lein buffer into view."
   (interactive)
-  (let ((buf (or lein-bufferlei
+  (let ((buf (or lein-buffer
                  (process-buffer niclein-lein-proc)
                  (process-buffer
                   (gethash
