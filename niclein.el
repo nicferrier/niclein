@@ -4,7 +4,7 @@
 
 ;; Author: Nic Ferrier <nferrier@ferrier.me.uk>
 ;; Keywords: languages, lisp
-;; Version: 0.0.36
+;; Version: 0.1.1
 ;; Package-requires: ((shadchen "1.4")(smartparens "1.5")(s "1.9.0"))
 ;; Url: https://github.com/nicferrier/niclein
 
@@ -135,6 +135,10 @@ If we have a host name then we can try and use remote java."
   (expand-file-name "~/work/nic-ssh/target/uberjar/nic-ssh.jar")
   "Where's my jar file that does an ssh client?")
 
+(defun niclein/leiningen-version ()
+  "Return the filename of the leiningen."
+  "leiningen-2.6.1-standalone.jar")
+
 (defun niclein/lein-process-command (&rest cmd)
   "Construct the Java leiningen command from CMD."
   ;; this needs the nicexec bash file:
@@ -160,7 +164,7 @@ If we have a host name then we can try and use remote java."
          (lein-jar
           (if tramp-host
               (plist-get remote-config :lein)
-              (expand-file-name "leiningen-2.5.1-standalone.jar" "~/.lein/self-installs"))))
+              (expand-file-name (niclein/leiningen-version) "~/.lein/self-installs"))))
     (append
      java
      (list
@@ -210,7 +214,11 @@ We use this to associate repl processes with files in the same project.")
 (defun niclein/buffer-cli-bol ()
   "Go to the beginning of the cli line."
   (interactive)
-  (goto-char niclein/prompt-entry-marker))
+  (let ((current-line (line-number-at-pos (point)))
+        (prompt-line (line-number-at-pos niclein/prompt-entry-marker)))
+    (if (equal current-line prompt-line)
+        (goto-char niclein/prompt-entry-marker)
+        (beginning-of-line))))
 
 (defun niclein/cli-hash ()
   "Insert a # in the command line."
@@ -271,6 +279,10 @@ instance created here is not used.")
     (delete-region niclein/prompt-entry-marker (point-max))
     cmd))
 
+(defun niclein/proc-insert (proc &rest args)
+  (apply 'insert args)
+  (set-marker (process-mark proc) (point)))
+
 (defun niclein/send-command (process command)
   "Send COMMAND to the niclein PROCESS.
 
@@ -283,7 +295,9 @@ COMMAND is read from the prompt if we're in interactive mode."
       (goto-char (line-beginning-position))
       (insert ";" command " >\n"))
     (funcall niclein/hist :new command)
-    (process-send-string process (format "%s\n" command))))
+    (goto-char (point-max))
+    (niclein/proc-insert process "\n")
+    (process-send-string process (concat command "\n"))))
 
 (defun niclein/not-blank (str)
   (and str (not (equal str ""))))
@@ -374,76 +388,81 @@ Requires that clojure send you stuff wrapped in a JSON repl, like:
 
 I think clojure already sends JSON maybe. Not sure.")
 
-(defun niclein/proc-log (lines)
+(defun niclein/proc-log (data)
   "A simple log for the filter, so we can see what's being filtered."
-  (with-current-buffer (get-buffer-create "*niclein-proc-log*")
-    (goto-char (point-max))
-    (princ
-     (format "%s %S\n" (buffer-name) lines)
-     (current-buffer)))
-  (when niclein/json-repl
-    (with-current-buffer (get-buffer-create "*niclein-testout*")
+  (let ((lines (split-string data "[\r\n]")))
+    (with-current-buffer (get-buffer-create "*niclein-proc-log*")
       (goto-char (point-max))
-      (let* ((outlines
-              (->> lines
-                (--remove (string-match-p "^#_=>$" it))
-                (--map (let ((m (string-match "^#_=> " it)))
-                         (if m
-                             (replace-match "" nil nil it)
-                             it)))))
-             (json-key-type 'keyword))
-        (-> (mapconcat 'identity outlines "")
-          (json-read-from-string)
-          (json-read-from-string)
-          (niclein/kva :result)
-          (niclein/format "%S")
-          (insert)))
-      (niclein:
-       (switch-to-buffer-other-window "*niclein-testout*")))))
+      (princ
+       (format "%s %S\n" (buffer-name) lines)
+       (current-buffer)))
+    (when niclein/json-repl
+      (with-current-buffer (get-buffer-create "*niclein-testout*")
+        (goto-char (point-max))
+        (let* ((outlines
+                (->> lines
+                  (--remove (string-match-p "^#_=>$" it))
+                  (--map (let ((m (string-match "^#_=> " it)))
+                           (if m
+                               (replace-match "" nil nil it)
+                               it)))))
+               (json-key-type 'keyword))
+          (-> (mapconcat 'identity outlines "")
+            (json-read-from-string)
+            (json-read-from-string)
+            (niclein/kva :result)
+            (niclein/format "%S")
+            (insert)))
+        (niclein:
+         (switch-to-buffer-other-window "*niclein-testout*"))))))
+
+(defun niclein/insert* (insert-func lines)
+  (let ((line-list (--remove (string-match-p "\\(^$\\|^ +$\\)" it) lines)))
+    (--each line-list (funcall insert-func it "\n"))))
+
+(defun niclein/proc-filter-fn (buffer mark-func insert-func data)
+  (let* ((line-list (split-string data "[\n\r]"))
+         (last-line (car (reverse line-list)))
+         (first-lines (reverse (cdr (reverse line-list)))))
+    (with-current-buffer buffer
+      (goto-char (funcall mark-func))
+      (if (equal (point) (line-beginning-position))
+          (cond
+            ((not (and last-line (string-match-p "^[^=]+=> $" last-line)))
+             (niclein/insert* insert-func line-list))
+            ((not (and last-line (string-match-p "^.*[^\n]$" last-line)))
+             (niclein/insert* insert-func first-lines)
+             (funcall insert-func last-line))
+            ;; else it's stuff where the last line is the prompt
+            (t
+             (niclein/insert* insert-func first-lines)
+             (funcall insert-func "=> ")
+             (set-marker niclein/prompt-marker (funcall mark-func))
+             (set-marker niclein/prompt-entry-marker (funcall mark-func))))
+          ;; Else it may be a long line or something
+          (goto-char (line-beginning-position))
+          (niclein/insert*
+           insert-func
+           (--keep (cond
+                     ((string-match-p ".*#_=>" it)
+                      (s-trim (car (reverse (split-string it "#_=>")))))
+                     ((string-match-p "^[^=]+=> $" it) " ")
+                     (t it))
+                   line-list))
+          ;; Why doesn't this work? we seem to need the additional: goto-char point-max
+          (set-marker niclein/prompt-marker (point-max))
+          (set-marker niclein/prompt-marker (point-max))
+          (set-marker (funcall mark-func) (point-max))
+          (goto-char (point-max))))))
 
 (defun niclein/proc-filter (proc data)
-  (with-current-buffer (process-buffer proc)
-    (save-excursion
-      (let* ((is-complete (string-match-p "^\\([a-zA-Z.-][a-zA-Z.0-9-]+\\)=> +$" data))
-             (raw-lines (split-string data "\n"))
-             (lines
-              (->> raw-lines
-                (--take-while (not (string-match "^\\([a-zA-Z.-][a-zA-Z.0-9-]+\\)=> +$" it)))
-                (--map (replace-regexp-in-string " +\\(#_=>\\)" "#_=>" it))
-                (-flatten)
-                (--remove (equal it ""))))
-             (lines-joined (mapconcat 'identity lines "\n"))
-             ;; We try and handle the last line not being "\n"
-             (lines-reversed (reverse lines))
-             (last-line (car lines-reversed)))
-        (niclein/proc-log lines) ; helps with logging
-        ;; Better handling of the process output using state variables
-        (if (or
-             (string-match ".*\\(CompilerException\\) \\([^:]+\\): \\(.*\\)\\(.*\\)$" last-line)
-             (string-match "^\\([a-zA-Z].*?\\) \\(.*\\) \\(([A-Za-z0-9.-]+:[0-9]+.*)\\)" last-line)
-             (string-match "^.*=> \\([a-zA-Z].*?\\) \\(.*\\)\\(([A-Za-z0-9.-]+:[0-9]+.*)\\)" last-line))
-            (let ((exception (match-string 1 last-line))
-                  (msg (match-string 2 last-line))
-                  (source-file (match-string 3 last-line)))
-              (goto-char niclein/prompt-marker) 
-              (insert (format "\n%s\n%s\n%s\n" exception msg source-file)))
-            ;; Else it's not an exception...
-            (goto-char
-             (if (process-get proc :last-complete)
-                 niclein/prompt-marker
-                 (or (process-get proc :end-position)
-                     niclein/prompt-marker)))
-            (insert lines-joined))
-        (when is-complete
-          (goto-char niclein/prompt-marker)
-          (insert "\n"))
-        ;; Record the state
-        (process-put proc :end-position (point))
-        (process-put proc :last-complete is-complete)
-        ;; Always go to the prompt
-        (goto-char (- niclein/prompt-marker 1))))
-    (goto-char niclein/prompt-entry-marker)))
-
+  "Filter for the cli process."
+  ;;(niclein/proc-log data) ; helps with logging
+  (niclein/proc-filter-fn
+   (process-buffer proc)
+   (lambda () (process-mark proc))
+   (lambda (&rest args) (apply 'niclein/proc-insert proc args))
+   data))
 
 (defun niclein/lein-process-sentinel (proc evt)
   (let ((msg (cond
@@ -496,7 +515,7 @@ process.")
 
 (defun niclein-kill-me ()
   (interactive)
-  (if (process-p niclein-lein-proc)
+  (if (processp niclein-lein-proc)
       (delete-process niclein-lein-proc)
       ;; Else
       (message "niclein - could not fine a niclein lein process - niclein-lein-proc")))
@@ -504,7 +523,7 @@ process.")
 (defun niclein-pop-lein (&optional lein-buffer)
   "Pop the lein buffer into view."
   (interactive)
-  (let ((buf (or lein-buffer
+  (let ((buf (or lein-bufferlei
                  (process-buffer niclein-lein-proc)
                  (process-buffer
                   (gethash
@@ -551,12 +570,25 @@ process.")
 (defun niclein-command (project command &rest args)
   "Run any lein COMMAND in PROJECT."
   (interactive
-   (list (or (expand-file-name
-              (locate-dominating-file
-               default-directory "project.clj"))
-             default-directory)
-         (let ((commands (--map (cons it it) niclein/lein-commands)))
-           (completing-read "lein command: " commands nil nil nil 'niclein/command-hist))))
+   (let ((dom-file (or (expand-file-name
+                        (locate-dominating-file
+                         default-directory "project.clj"))
+                       default-directory))
+         (commands (--map (cons it it) niclein/lein-commands)))
+     (if current-prefix-arg
+         (append
+          (list dom-file)
+          (split-string 
+           (read-from-minibuffer
+            "lein command with args: "
+            nil nil nil
+            'niclein/command-hist) " "))
+         ;; Else do a completing read
+         (list dom-file
+               (completing-read
+                "lein command: " commands
+                nil nil nil
+                'niclein/command-hist)))))
   (let* ((proj (expand-file-name project)) ; so we can use from eshell
          (buf (get-buffer-create (format "*niclein-%s-%s*" command proj)))
          (proc
@@ -746,9 +778,9 @@ reference to it."
         ;; Set up the repl buffer with a bottom prompt
         (with-current-buffer (process-buffer proc)
           (setq niclein/prompt-marker (point-marker))
-          (set-marker-insertion-type niclein/prompt-marker nil)
+          ;;(set-marker-insertion-type niclein/prompt-marker nil)
           (goto-char niclein/prompt-marker)
-          (insert "=> ")
+          ;;(insert "=> ")
           (set-marker-insertion-type niclein/prompt-marker t)
           (setq niclein/prompt-entry-marker (point-marker))
           (set-marker-insertion-type niclein/prompt-entry-marker nil))
@@ -861,6 +893,7 @@ reference to it."
     (--map (cons (file-name-nondirectory it) it) files)))
 
 (defun niclein/index-cache ()
+  (message "niclein building index cache...")
   (let* ((dir (locate-dominating-file (buffer-file-name) "project.clj"))
          (sym-name (concat "niclein/index-result_" (base64-encode-string dir)))
          (symbol (intern sym-name)))
