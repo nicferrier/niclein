@@ -4,7 +4,7 @@
 
 ;; Author: Nic Ferrier <nferrier@ferrier.me.uk>
 ;; Keywords: languages, lisp
-;; Version: 0.1.1
+;; Version: 0.1.2
 ;; Package-requires: ((shadchen "1.4")(smartparens "1.5")(s "1.9.0"))
 ;; Url: https://github.com/nicferrier/niclein
 
@@ -888,9 +888,23 @@ reference to it."
         all)))
 
 (defun niclein/index (project-file-location)
+  "Makes a list of base file names across the project, for completion.
+
+Also introduces a hyphenated form in addition to any underscored
+name because it's more natural to type somehow."
   (let* ((project-dir (file-name-directory project-file-location))
          (files (niclein/all-files project-dir "\\(.*\\.clj$\\|/resources/.*\\)")))
-    (--map (cons (file-name-nondirectory it) it) files)))
+    (->> files
+      (--map (cons (file-name-nondirectory it) it))
+      (--map (let ((bare-name (car it))
+                   (full-path (cdr it)))
+               (if (string-match-p "_" bare-name)
+                   (list
+                    it
+                    (cons (replace-regexp-in-string "_" "-" bare-name)
+                          full-path))
+                   it)))
+      (-flatten))))
 
 (defun niclein/index-cache ()
   (message "niclein building index cache...")
