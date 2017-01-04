@@ -139,14 +139,17 @@ If we have a host name then we can try and use remote java."
   "Return the filename of the leiningen."
   "leiningen-2.6.1-standalone.jar")
 
+(defun niclein/nicexec-bash-file ()
+  "Just a record of what goes in the bash file for tramp lein"
+  ;; This should be saved to a file somehow
+  "PATH=$PATH:/opt/eFX/apps/evolve/java/jdk1.8.0_25/bin
+cd $1
+shift
+exec $*")
+
 (defun niclein/lein-process-command (&rest cmd)
   "Construct the Java leiningen command from CMD."
-  ;; this needs the nicexec bash file:
-  ;;
-  ;; PATH=$PATH:/opt/eFX/apps/evolve/java/jdk1.8.0_25/bin
-  ;; cd $1
-  ;; shift
-  ;; exec $*
+  ;; this needs the nicexec bash file, see niclein/nicexec-bash-file
   (let* ((tramp-host (niclein/file-name->tramp-host))
          (tramp-directory
           (when tramp-host
