@@ -137,7 +137,7 @@ If we have a host name then we can try and use remote java."
 
 (defun niclein/leiningen-version ()
   "Return the filename of the leiningen."
-  "leiningen-2.6.1-standalone.jar")
+  "leiningen-2.6.1-standalone.zip")
 
 (defun niclein/nicexec-bash-file ()
   "Just a record of what goes in the bash file for tramp lein"
