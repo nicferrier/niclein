@@ -5,7 +5,7 @@
 ;; Author: Nic Ferrier <nferrier@ferrier.me.uk>
 ;; Keywords: languages, lisp
 ;; Version: 0.1.4
-;; Package-requires: ((shadchen "1.4")(smartparens "1.5")(s "1.9.0"))
+;; Package-requires: ((shadchen "1.4")(s "1.9.0")(kv "0.0.19")(dash "2.12.0"))
 ;; Url: https://github.com/nicferrier/niclein
 
 ;; This program is free software; you can redistribute it and/or modify
@@ -44,12 +44,13 @@
 ;;; Code:
 
 (require 'shadchen)
-(require 'smartparens)
+;;(require 'smartparens)
 (require 'url) ; for retrieving leiningen if we need it
 (require 'clojure-mode)
 (require 's)
 (require 'kv)
 (require 'base64)
+(require 'dash)
 
 (defconst lein-version "2.5.1"
   "The version of lein we will retrieve.")
@@ -63,10 +64,17 @@
   "Simple leiningen management for Clojure."
   :group 'clojure-mode)
 
+(defun niclein-java-init (symbol value)
+  (expand-file-name "bin/java.exe" (getenv "JAVA_HOME")))
+
 (defcustom niclein-java "java"
   "What Java should we use?"
   :group 'niclein
   :type 'file)
+
+(defun niclein-java-search ()
+  (interactive)
+  (setq (expand-file-name "bin/java.exe" (getenv "JAVA_HOME"))))
 
 (defvar niclein/prompt-marker nil
   "Where the prompt is in a repl buffer.")
@@ -137,7 +145,11 @@ If we have a host name then we can try and use remote java."
 
 (defun niclein/leiningen-version ()
   "Return the filename of the leiningen."
-  "leiningen-2.6.1-standalone.zip")
+  (let ((lein-dir (expand-file-name "~/.lein/self-installs")))
+    (if (file-exists-p lein-dir)
+	(car (directory-files lein-dir t ".*-.*\\.jar"))
+      ;; else
+      "leiningen-2.6.1-standalone.zip")))
 
 (defun niclein/nicexec-bash-file ()
   "Just a record of what goes in the bash file for tramp lein"
@@ -352,8 +364,8 @@ COMMAND is read from the prompt if we're in interactive mode."
   (list
    (lambda ()
      (show-paren-mode)
-     (smartparens-mode)
-     (sp-local-pair 'niclein-mode "'" nil :actions nil)
+     ;;(smartparens-mode)
+     ;;(sp-local-pair 'niclein-mode "'" nil :actions nil)
      (goto-address-mode)
      (setq-local niclein/hist (niclein/cli)) ; appears to work even tho it's a const
      (niclein/init-map)
